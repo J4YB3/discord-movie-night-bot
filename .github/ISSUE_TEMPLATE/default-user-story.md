@@ -2,14 +2,13 @@
 name: Default User Story
 about: The default template for creating a new user story
 title: ''
-labels: ''
+labels: feature
 assignees: ''
 
 ---
 
 ## Description
-<e.g. **As a** User **I want** to do this **so that** I get this benefit>
+_**As a**_  User  _**I want**_  to do this  _**so that**_  I get this benefit>
 
 ## Acceptance Criteria
-- [x] A fulfilled criteria
 - [ ] An unfulfilled criteria
