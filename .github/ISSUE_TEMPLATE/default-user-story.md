@@ -8,7 +8,9 @@ assignees: ''
 ---
 
 ## Description
-_**As a**_  User  _**I want**_  to do this  _**so that**_  I get this benefit>
+_**As a**_  User 
+_**I want**_  to 
+_**so that**_ 
 
 ## Acceptance Criteria
 - [ ] An unfulfilled criteria
