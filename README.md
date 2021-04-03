@@ -8,7 +8,19 @@ Since I can't provide a web server for you to host this bot on, you need to foll
 1. Attach a bot to the created application under `Settings > Bot` 
 1. Copy the Bot-Token to your clipboard
 1. Add the token to the source files
+    1. Create a directory named `src` inside the `discord_data` directory
     1. Create the file `lib.rs` in the `discord_data/src` directory
     1. To this file add the line `pub static TOKEN: &'static str = "<YOUR_TOKEN>";` where you replace `<YOUR_TOKEN>` with the previously copied token. Note that the double quotes are necessary.
 
-In order to compile an executable file you need to have the programming language Rust and its dependencies installed on your system. Because you need to generate your own token I can not provide an executable. Publishing the token will open the bot to hacking attacks, since everybody with the token can run dangerous programs on the bot.
+In order to compile an executable file you need to have the programming language Rust and its dependencies installed on your system. Because you need to generate your own token I can not provide an executable.
+
+### Important note: 
+Publishing the token will open the bot to hacking attacks, since everybody with the token can potentially run dangerous programs on the bot. Do never publish the token anywhere.
+
+## Inviting the bot to your server
+After the executable was created you just need to invite the bot to your server.
+Following this link (discordapi.com/permissions.html#257088) will lead you to a permissions calculator. On this page you just need to paste the Client ID of your Discord application into the field at the bottom. The Client ID can be found on the Discord developers page (where you created the Discord bot application) under the section `OAuth2`.  
+After you inserted the Client ID you can follow the link at the bottom of the page, which will redirect you to a Discord page asking you to log into your Discord account. If you are logged in, the page will prompt you to enter a server to add the bot to.
+
+## Starting the executable
+Once all these steps are completed you can start the executable. The bot will wake up and should now be online on your server.
