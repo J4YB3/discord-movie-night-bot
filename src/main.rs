@@ -1,5 +1,5 @@
 extern crate discord_data;
-use discord::{self, Discord as Discord, model as Model};
+use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
 use std::collections::HashMap;
 
 mod commands;
@@ -9,6 +9,9 @@ pub struct BotData {
     bot: Discord,
     message: Option<Model::Message>,
     watch_list: HashMap<String, behaviour::WatchListEntry>,
+    next_movie_id: u32,
+    server_id: Model::ServerId,
+    server_roles: Vec<Model::Role>,
 }
 
 fn main() {
@@ -16,17 +19,47 @@ fn main() {
 
     let bot = Discord::from_bot_token(discord_data::TOKEN).expect("Bot creation from token failed");
 
-    let (mut connection, _ready_event) = bot.connect().expect("Establishing connecting to server failed");
+    let (mut connection, ready_event) = bot.connect().expect("Establishing connecting to server failed");
+
+    let mut state = State::new(ready_event);
 
     let mut bot_data = BotData {
         bot: bot,
         message: None,
         watch_list: watch_list,
+        next_movie_id: 0,
+        server_id: ServerId(0),
+        server_roles: vec![],
     };
 
     loop {
-        match connection.recv_event() {
-            Ok(Model::Event::MessageCreate(message)) => {
+        let event = match connection.recv_event() {
+			Ok(event) => event,
+			Err(err) => {
+				println!("[Warning] Receive error: {:?}", err);
+				if let discord::Error::WebSocket(..) = err {
+					// Handle the websocket connection being dropped
+					let (connection, ready_event) = bot_data.bot.connect().expect("connect failed");
+					state = State::new(ready_event);
+					println!("[Ready] Reconnected successfully.");
+				}
+				if let discord::Error::Closed(..) = err {
+					break;
+				}
+				continue;
+			}
+		};
+
+        state.update(&event);
+
+        if bot_data.server_id == ServerId(0) {
+            bot_data.server_id = state.servers()[0].id;
+        }
+        // Roles could change while the bot is running
+        bot_data.server_roles = state.servers()[0].roles.clone();
+
+        match event {
+            Model::Event::MessageCreate(message) => {
                 // Handle the quit command first, since it needs to be within main
                 if message.content == commands::construct(commands::QUIT) {
                     let _ = bot_data.bot.send_message(
@@ -43,11 +76,7 @@ fn main() {
                     call_behaviour(&mut bot_data);
                 }
             },
-            Ok(_) => (),
-            Err(discord::Error::Closed(code, body)) => {
-                println!("Gateway closed on us with code {:?}: {}", code, body);
-            },
-            Err(err) => println!("Received error: {}", err),
+            _ => {},
         }
     }
 
@@ -75,17 +104,24 @@ fn call_behaviour(bot_data: &mut BotData) {
 
         println!("Command was '{}'. Parameters were '{}'", command, parameters);
         match command {
-        commands::ADD_MOVIE | commands::ADD_MOVIE_SHORT => {
-            behaviour::add_movie(bot_data, parameters);
-        },
-        _ => {
-            let _ = bot_data.bot.send_message(
-                message.channel_id,
-                format!("Unknown command '{}'", command).as_str(),
-                "",
-                false
-            );
+            commands::ADD_MOVIE | commands::ADD_MOVIE_SHORT => {
+                behaviour::add_movie(bot_data, parameters);
+            },
+            commands::REMOVE_MOVIE | commands::REMOVE_MOVIE_SHORT => {
+                let desired_id = parameters.parse();
+                match desired_id {
+                    Ok(id) => behaviour::remove_movie_by_id(bot_data, id),
+                    Err(_) => behaviour::remove_movie_by_title(bot_data, parameters)
+                };
+            },
+            _ => {
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Unknown command '{}'", command).as_str(),
+                    "",
+                    false
+                );
+            }
         }
-    }
     }
 }

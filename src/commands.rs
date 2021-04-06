@@ -15,3 +15,5 @@ pub fn construct_custom(command: &str, custom_prefix: String) -> String {
 pub const QUIT: &str = "quit";
 pub const ADD_MOVIE: &str = "add_movie";
 pub const ADD_MOVIE_SHORT: &str = "am";
+pub const REMOVE_MOVIE: &str = "remove_movie";
+pub const REMOVE_MOVIE_SHORT: &str = "rm";
