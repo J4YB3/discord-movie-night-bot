@@ -60,7 +60,7 @@ fn main() {
 
         match event {
             Model::Event::MessageCreate(message) => {
-                // Handle the quit command first, since it needs to be within main
+                // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == commands::construct(commands::QUIT) {
                     let _ = bot_data.bot.send_message(
                         message.channel_id,
@@ -156,7 +156,10 @@ fn call_behaviour(bot_data: &mut BotData) {
                         false
                     );
                 }
-            }
+            },
+            commands::SHOW_WATCH_LIST | commands::SHOW_WATCH_LIST_SHORT => {
+                movie_behaviour::show_watch_list(bot_data);
+            },
             _ => {
                 let _ = bot_data.bot.send_message(
                     message.channel_id,

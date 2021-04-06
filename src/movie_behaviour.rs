@@ -1,11 +1,33 @@
 use discord::{model as Model, Discord};
 use chrono::DateTime;
 use std::collections::HashMap;
+use itertools::Itertools;
+use std::cmp::Ordering;
+use crate::commands;
 
+#[derive(Eq)]
 pub struct WatchListEntry {
     movie_title: String,
     user: String,
     timestamp: DateTime<chrono::FixedOffset>,
+}
+
+impl Ord for WatchListEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.movie_title.cmp(&other.movie_title)
+    }
+}
+
+impl PartialOrd for WatchListEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for WatchListEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.movie_title == other.movie_title
+    }
 }
 
 /**
@@ -42,7 +64,7 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
 
         let _ = bot_data.bot.send_message(
             message.channel_id,
-            format!("Added movie '{}' to the watch list.", title).as_str(),
+            format!("Added movie '{}' to the watch list. (ID: `{}`)", title, bot_data.next_movie_id - 1).as_str(),
             "",
             false
         );
@@ -126,7 +148,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
  * Edits the title of a movie list entry via the id
  */
 pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str) {
-    let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
+    let message = bot_data.message.as_ref().expect("Passing message to edit_movie_by_id function failed.");
 
     let user_is_admin: bool = is_user_administrator(bot_data, message.author.id);
 
@@ -182,6 +204,54 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
             );
         }
     }
+}
+
+/**
+ * Formats the watch list hash map, formats it and sends it as an embedded message
+ */
+pub fn show_watch_list(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_watch_list function failed.");
+
+    // Create a hashmap that stores the user as key and a tuple containing the id and the watch list entry of every movie
+    let mut user_movies: HashMap<&String, Vec<(u32, &WatchListEntry)>> = HashMap::new();
+    let mut highest_id: u32 = 0;
+    for (id, entry) in bot_data.watch_list.iter().sorted() {
+        // Save the highest id
+        let mut highest_id = if *id > highest_id { *id } else { highest_id };
+
+        // Append the id, entry tuple to the user movie vector
+        if let Some(vector) = user_movies.get_mut(&entry.user) {
+            vector.push((*id, &entry));
+        }
+        // if the user got no movies yet create the vector and add the first tuple
+        else {
+            user_movies.insert(&entry.user, vec![(*id, entry)]);
+        }
+    }
+
+    let mut watch_list_string: String = String::new();
+    let highest_id_length = highest_id.to_string().len();
+
+    watch_list_string += format!("Format: `ID` Status | Title | Date\n\n").as_str();
+
+    // For every user
+    for (user, entry_vector) in user_movies.iter().sorted() {
+        watch_list_string += format!("Movies added by **{}**\n", user).as_str();
+        
+        // For every movie entry
+        for (id, entry) in entry_vector {
+            watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
+            watch_list_string += format!(" :white_large_square: | {} | added on *{}*\n", entry.movie_title, entry.timestamp.format("%A, %d.%m.%Y")).as_str();
+        }
+
+        watch_list_string += "\n";
+    }
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title("Watch list").description(watch_list_string.as_str())
+    );
 }
 
 /**

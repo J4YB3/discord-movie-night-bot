@@ -19,3 +19,7 @@ pub const REMOVE_MOVIE: &str = "remove_movie";
 pub const REMOVE_MOVIE_SHORT: &str = "rm";
 pub const EDIT_MOVIE: &str = "edit_movie";
 pub const EDIT_MOVIE_SHORT: &str = "em";
+pub const SHOW_WATCH_LIST: &str = "watch_list";
+pub const SHOW_WATCH_LIST_SHORT: &str = "wl";
+
+pub const COLOR_ERROR: u64 = 0xff0000;
