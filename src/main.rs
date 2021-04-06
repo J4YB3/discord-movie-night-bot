@@ -3,19 +3,19 @@ use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
 use std::collections::HashMap;
 
 mod commands;
-mod behaviour;
+mod movie_behaviour;
 
 pub struct BotData {
     bot: Discord,
     message: Option<Model::Message>,
-    watch_list: HashMap<String, behaviour::WatchListEntry>,
+    watch_list: HashMap<String, movie_behaviour::WatchListEntry>,
     next_movie_id: u32,
     server_id: Model::ServerId,
     server_roles: Vec<Model::Role>,
 }
 
 fn main() {
-    let mut watch_list: HashMap<String, behaviour::WatchListEntry> = HashMap::new();
+    let mut watch_list: HashMap<String, movie_behaviour::WatchListEntry> = HashMap::new();
 
     let bot = Discord::from_bot_token(discord_data::TOKEN).expect("Bot creation from token failed");
 
@@ -105,13 +105,13 @@ fn call_behaviour(bot_data: &mut BotData) {
         println!("Command was '{}'. Parameters were '{}'", command, parameters);
         match command {
             commands::ADD_MOVIE | commands::ADD_MOVIE_SHORT => {
-                behaviour::add_movie(bot_data, parameters);
+                movie_behaviour::add_movie(bot_data, parameters);
             },
             commands::REMOVE_MOVIE | commands::REMOVE_MOVIE_SHORT => {
                 let desired_id = parameters.parse();
                 match desired_id {
-                    Ok(id) => behaviour::remove_movie_by_id(bot_data, id),
-                    Err(_) => behaviour::remove_movie_by_title(bot_data, parameters)
+                    Ok(id) => movie_behaviour::remove_movie_by_id(bot_data, id),
+                    Err(_) => movie_behaviour::remove_movie_by_title(bot_data, parameters)
                 };
             },
             _ => {
