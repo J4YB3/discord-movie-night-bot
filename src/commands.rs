@@ -17,3 +17,5 @@ pub const ADD_MOVIE: &str = "add_movie";
 pub const ADD_MOVIE_SHORT: &str = "am";
 pub const REMOVE_MOVIE: &str = "remove_movie";
 pub const REMOVE_MOVIE_SHORT: &str = "rm";
+pub const EDIT_MOVIE: &str = "edit_movie";
+pub const EDIT_MOVIE_SHORT: &str = "em";

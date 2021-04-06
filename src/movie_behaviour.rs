@@ -1,9 +1,9 @@
 use discord::{model as Model, Discord};
-use std::collections::HashMap;
 use chrono::DateTime;
+use std::collections::HashMap;
 
 pub struct WatchListEntry {
-    id: u32,
+    movie_title: String,
     user: String,
     timestamp: DateTime<chrono::FixedOffset>,
 }
@@ -16,9 +16,8 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
 
     let message = bot_data.message.as_ref().expect("Passing message to add_movie function failed");
 
-    // The movie title is already in the watch list
-    if bot_data.watch_list.contains_key(&title.to_string()) {
-        let previous_entry = bot_data.watch_list.get(&title.to_string()).expect("Accessing the watch list has failed inside the add_movie function.");
+    if let Some(id) = get_movie_id_in_watch_list(title, &bot_data.watch_list) {
+        let previous_entry = bot_data.watch_list.get(&id).expect("Accessing the watch list has failed inside the add_movie function.");
 
         let _ = bot_data.bot.send_message(
             message.channel_id,
@@ -32,14 +31,14 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
         );
     } else {
         let new_entry = WatchListEntry {
-            id: bot_data.next_movie_id,
+            movie_title: title.to_string(),
             user: message.author.name.clone(),
             timestamp: message.timestamp,
         };
 
+        bot_data.watch_list.insert(bot_data.next_movie_id, new_entry);
+        
         bot_data.next_movie_id += 1;
-
-        bot_data.watch_list.insert(title.to_string(), new_entry);
 
         let _ = bot_data.bot.send_message(
             message.channel_id,
@@ -55,43 +54,12 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
  * movies.
  */
 pub fn remove_movie_by_title(bot_data: &mut crate::BotData, title: &str) {
-    println!("Removing movie {}", title);
+    let possible_id = get_movie_id_in_watch_list(title, &bot_data.watch_list);
 
-    let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
-
-    let user_is_admin: bool = is_user_administrator(bot_data, message.author.id);
-
-    let movie = bot_data.watch_list.get(&title.to_string());
-    match movie {
-        Some(watch_list_entry) => {
-            if watch_list_entry.user == message.author.name {
-                let _ = bot_data.watch_list.remove(&title.to_string());
-                let _ = bot_data.bot.send_message(
-                    message.channel_id,
-                    format!("Removed movie '{}'", title).as_str(),
-                    "",
-                    false
-                );
-            } else if user_is_admin {
-                let watch_list_entry_user = watch_list_entry.user.clone();
-                let _ = bot_data.watch_list.remove(&title.to_string());
-                let _ = bot_data.bot.send_message(
-                    message.channel_id,
-                    format!("Removed movie '{}' added by user {}", title, watch_list_entry_user).as_str(),
-                    "",
-                    false
-                );
-            } else {
-                let _ = bot_data.bot.send_message(
-                    message.channel_id,
-                    format!("Insufficient permissions to remove the movie '{}' added by user {}.", title, watch_list_entry.user).as_str(),
-                    "",
-                    false
-                );
-            }
-            
-        },
+    match possible_id {
+        Some(id) => remove_movie_by_id(bot_data, id),
         None => {
+            let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
             let _ = bot_data.bot.send_message(
                 message.channel_id,
                 format!("A movie with the title '{}' was not found.", title).as_str(),
@@ -107,15 +75,113 @@ pub fn remove_movie_by_title(bot_data: &mut crate::BotData, title: &str) {
  * to remove any movie by any user. Normal users are only allowed to remove their own movies.
  */
 pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
-    let mut associated_title: String = "".to_string();
-    for (title, movie_entry) in &bot_data.watch_list {
-        if movie_entry.id == id {
-            associated_title = title.clone();
-            break;
+    let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
+
+    let user_is_admin: bool = is_user_administrator(bot_data, message.author.id);
+
+    let movie = bot_data.watch_list.get(&id);
+    match movie {
+        Some(watch_list_entry) => {
+            let watch_list_entry_title = watch_list_entry.movie_title.clone();
+
+            if watch_list_entry.user == message.author.name {
+                let _ = bot_data.watch_list.remove(&id);
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Removed movie '{}'", watch_list_entry_title).as_str(),
+                    "",
+                    false
+                );
+            } else if user_is_admin {
+                let watch_list_entry_user = watch_list_entry.user.clone();
+                let _ = bot_data.watch_list.remove(&id);
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Removed movie '{}' added by user {}", watch_list_entry_title, watch_list_entry_user).as_str(),
+                    "",
+                    false
+                );
+            } else {
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Insufficient permissions to remove the movie '{}' added by user {}.", watch_list_entry_title, watch_list_entry.user).as_str(),
+                    "",
+                    false
+                );
+            }
+            
+        },
+        None => {
+            let _ = bot_data.bot.send_message(
+                message.channel_id,
+                format!("A movie with the id '{}' was not found.", id).as_str(),
+                "",
+                false
+            );
         }
     }
-    
-    remove_movie_by_title(bot_data, &associated_title.as_str());
+}
+
+/**
+ * Edits the title of a movie list entry via the id
+ */
+pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str) {
+    let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
+
+    let user_is_admin: bool = is_user_administrator(bot_data, message.author.id);
+
+    let movie = bot_data.watch_list.get(&id);
+    match movie {
+        Some(watch_list_entry) => {
+            let watch_list_entry_title = watch_list_entry.movie_title.clone();
+
+            if watch_list_entry.user == message.author.name {
+                let updated_entry = WatchListEntry {
+                    movie_title: new_title.to_string(),
+                    user: watch_list_entry.user.clone(),
+                    ..*watch_list_entry
+                };
+                let _ = bot_data.watch_list.insert(id, updated_entry);
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Changed movie '{}' to '{}'", watch_list_entry_title, new_title).as_str(),
+                    "",
+                    false
+                );
+            } else if user_is_admin {
+                let watch_list_entry_user = watch_list_entry.user.clone();
+
+                let updated_entry = WatchListEntry {
+                    movie_title: new_title.to_string(),
+                    user: watch_list_entry.user.clone(),
+                    ..*watch_list_entry
+                };
+                let _ = bot_data.watch_list.insert(id, updated_entry);
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Changed movie '{}' added by user {} to '{}'", watch_list_entry_title, watch_list_entry_user, new_title).as_str(),
+                    "",
+                    false
+                );
+            } else {
+                let _ = bot_data.bot.send_message(
+                    message.channel_id,
+                    format!("Insufficient permissions to edit the movie '{}' added by user {}.", watch_list_entry_title, watch_list_entry.user).as_str(),
+                    "",
+                    false
+                );
+            }
+            
+        },
+        None => {
+            let _ = bot_data.bot.send_message(
+                message.channel_id,
+                format!("A movie with the id {} was not found.", id).as_str(),
+                "",
+                false
+            );
+        }
+    }
 }
 
 /**
@@ -142,4 +208,16 @@ fn is_user_administrator(bot_data: &crate::BotData, user_id: Model::UserId) -> b
 fn is_role_administrator(role: &Model::Role) -> bool {
     let admin_permissions = Model::permissions::Permissions::ADMINISTRATOR;
     role.permissions.contains(admin_permissions)
+}
+
+/**
+ * Returns the watch list id of the movie if the movie was found
+ */
+fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
+    for (id, entry) in watch_list {
+        if entry.movie_title == title {
+            return Some(*id);
+        }
+    }
+    None
 }

@@ -8,14 +8,14 @@ mod movie_behaviour;
 pub struct BotData {
     bot: Discord,
     message: Option<Model::Message>,
-    watch_list: HashMap<String, movie_behaviour::WatchListEntry>,
+    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
     next_movie_id: u32,
     server_id: Model::ServerId,
     server_roles: Vec<Model::Role>,
 }
 
 fn main() {
-    let mut watch_list: HashMap<String, movie_behaviour::WatchListEntry> = HashMap::new();
+    let mut watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
 
     let bot = Discord::from_bot_token(discord_data::TOKEN).expect("Bot creation from token failed");
 
@@ -105,15 +105,58 @@ fn call_behaviour(bot_data: &mut BotData) {
         println!("Command was '{}'. Parameters were '{}'", command, parameters);
         match command {
             commands::ADD_MOVIE | commands::ADD_MOVIE_SHORT => {
-                movie_behaviour::add_movie(bot_data, parameters);
+                if parameters == "" {
+                    let _ = bot_data.bot.send_message(
+                        message.channel_id,
+                        "Please enter a movie title after the command, separated by a whitespace.",
+                        "",
+                        false
+                    );
+                } else {
+                    movie_behaviour::add_movie(bot_data, parameters);
+                }
             },
             commands::REMOVE_MOVIE | commands::REMOVE_MOVIE_SHORT => {
                 let desired_id = parameters.parse();
                 match desired_id {
                     Ok(id) => movie_behaviour::remove_movie_by_id(bot_data, id),
-                    Err(_) => movie_behaviour::remove_movie_by_title(bot_data, parameters)
+                    Err(_) => {
+                        if parameters == "" {
+                            let _ = bot_data.bot.send_message(
+                                message.channel_id,
+                                "Please enter a movie title or a valid ID after the command, separated by a whitespace.",
+                                "",
+                                false
+                            );
+                        } else {
+                            movie_behaviour::remove_movie_by_title(bot_data, parameters)
+                        }
+                    }
                 };
             },
+            commands::EDIT_MOVIE | commands::EDIT_MOVIE_SHORT => {
+                if let Some(first_index) = parameters.find(char::is_whitespace) {
+                    let desired_id = parameters[0..first_index].parse::<u32>();
+                    match desired_id {
+                        Ok(id) => movie_behaviour::edit_movie_by_id(bot_data, id, &parameters[first_index+1..]),
+                        Err(_) => {
+                            let _ = bot_data.bot.send_message(
+                                message.channel_id,
+                                format!("Invalid movie ID '{}'. Please enter a number and then the new title.", parameters[0..first_index].to_string()).as_str(),
+                                "",
+                                false
+                            );
+                        }
+                    }
+                } else {
+                    let _ = bot_data.bot.send_message(
+                        message.channel_id,
+                        "Wrong usage. Please enter the movie ID as a number and then the new title.",
+                        "",
+                        false
+                    );
+                }
+            }
             _ => {
                 let _ = bot_data.bot.send_message(
                     message.channel_id,
