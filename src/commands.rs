@@ -23,3 +23,5 @@ pub const SHOW_WATCH_LIST: &str = "watch_list";
 pub const SHOW_WATCH_LIST_SHORT: &str = "wl";
 
 pub const COLOR_ERROR: u64 = 0xff0000;
+pub const COLOR_SUCCESS: u64 = 0x7ef542;
+pub const COLOR_WARNING: u64 = 0xf5d442;
