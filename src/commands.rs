@@ -22,7 +22,11 @@ pub const EDIT_MOVIE: &str = "edit_movie"; // !edit_movie <id> <new_title> | Cha
 pub const EDIT_MOVIE_SHORT: &str = "em"; // !em <id> <new_title> | Short form for edit_movie
 pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list | Shows the full watch list
 pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl | Short form for watch_list
+pub const HELP: &str = "help"; // !help | Shows a list of available commandsa
+pub const HELP_SHORT: &str = "h";
 
 pub const COLOR_ERROR: u64 = 0xff0000; // red
 pub const COLOR_SUCCESS: u64 = 0x7ef542; // green
 pub const COLOR_WARNING: u64 = 0xf5d442; // yellow
+pub const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
+pub const COLOR_INFORMATION: u64 = 0x3b88c3; // blue

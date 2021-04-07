@@ -11,6 +11,7 @@ pub enum MovieStatus {
     Watched,
     Unavailable,
     Rewatch,
+    Removed,
 }
 
 impl MovieStatus {
@@ -18,8 +19,9 @@ impl MovieStatus {
         match self {
             MovieStatus::NotWatched => ":white_medium_square:",
             MovieStatus::Watched => ":white_check_mark:",
-            MovieStatus::Unavailable => ":large_orange_diamond:",
+            MovieStatus::Unavailable => ":orange_square:",
             MovieStatus::Rewatch => ":recycle:",
+            MovieStatus::Removed => ":red_square:"
         }
     }
 }
@@ -34,6 +36,7 @@ impl PartialEq for MovieStatus {
 pub struct WatchListEntry {
     movie_title: String,
     user: String,
+    user_id: Model::UserId,
     status: MovieStatus,
     timestamp: DateTime<chrono::FixedOffset>,
 }
@@ -83,7 +86,8 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
             movie_title: title.to_string(),
             user: message.author.name.clone(),
             timestamp: message.timestamp,
-            status: MovieStatus::NotWatched
+            status: MovieStatus::NotWatched,
+            user_id: message.author.id,
         };
 
         bot_data.watch_list.insert(bot_data.next_movie_id, new_entry);
@@ -159,12 +163,12 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Removed movie\n`{:0>4}` {} **{}** | added on *{}* by {}", 
+                        format!("Removed movie\n`{:0>4}` {} **{}** | added on *{}* by <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
                             watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
-                            watch_list_entry.user
+                            watch_list_entry.user_id
                         ).as_str(),
                     )
                     .color(commands::COLOR_WARNING)
@@ -175,12 +179,12 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Insufficient permissions to remove the movie\n`{:0>4}` {} **{}** | added on *{}* by {}", 
+                        format!("Insufficient permissions to remove the movie\n`{:0>4}` {} **{}** | added on *{}* by <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
                             watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
-                            watch_list_entry.user
+                            watch_list_entry.user_id
                         ).as_str(),
                     )
                     .color(commands::COLOR_WARNING)
@@ -254,7 +258,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                 let _ = bot_data.bot.send_embed(
                     message.channel_id,
                     "",
-                    |embed| embed.title(format!("Changed movie added by {}", updated_entry.user).as_str())
+                    |embed| embed.title(format!("Changed movie added by <@{}>", updated_entry.user_id).as_str())
                     .description(
                         format!("
                         **from**
@@ -279,7 +283,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Insufficient permissions to edit the movie **{}** added by {}.", watch_list_entry_title, watch_list_entry.user).as_str(),
+                        format!("Insufficient permissions to edit the movie **{}** added by <@{}>.", watch_list_entry_title, watch_list_entry.user_id).as_str(),
                     )
                     .color(commands::COLOR_ERROR)
                 );
@@ -307,11 +311,7 @@ pub fn show_watch_list(bot_data: &crate::BotData) {
 
     // Create a hashmap that stores the user as key and a tuple containing the id and the watch list entry of every movie
     let mut user_movies: HashMap<&String, Vec<(u32, &WatchListEntry)>> = HashMap::new();
-    let mut highest_id: u32 = 0;
     for (id, entry) in bot_data.watch_list.iter().sorted() {
-        // Save the highest id
-        let mut highest_id = if *id > highest_id { *id } else { highest_id };
-
         // Append the id, entry tuple to the user movie vector
         if let Some(vector) = user_movies.get_mut(&entry.user) {
             vector.push((*id, &entry));
@@ -323,10 +323,13 @@ pub fn show_watch_list(bot_data: &crate::BotData) {
     }
 
     let mut watch_list_string: String = String::new();
-    let highest_id_length = highest_id.to_string().len();
 
-    watch_list_string += format!("Format: `ID` Status **Title** | *Date*\n\n").as_str();
-
+    if bot_data.watch_list.len() == 1 {
+        watch_list_string += format!("There is currently **{}** movie on the list\n\n", bot_data.watch_list.len()).as_str();
+    } else {
+        watch_list_string += format!("There are currently **{}** movies on the list\n\n", bot_data.watch_list.len()).as_str();
+    }
+        
     // For every user
     for (user, entry_vector) in user_movies.iter().sorted() {
         watch_list_string += format!("Movies added by **{}**\n", user).as_str();
@@ -343,7 +346,7 @@ pub fn show_watch_list(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("Watch list").description(watch_list_string.as_str())
+        |embed| embed.title("Watch list").description(watch_list_string.as_str()).color(commands::COLOR_BOT)
     );
 }
 
