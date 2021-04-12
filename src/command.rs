@@ -75,6 +75,8 @@ impl FromStr for Command {
 
         let (command, arguments) = input.split_at(1);
 
+        // We know the input contains at least one element and we split off the first element into command.
+        // Thus, command has exactly one element at [0].
         Ok(match command[0] {
             QUIT => Self::Quit,
             HELP | HELP_SHORT => Self::Help(SimpleCommand::from(arguments.join(" ").as_str())),
@@ -82,7 +84,7 @@ impl FromStr for Command {
             ADD_MOVIE | ADD_MOVIE_SHORT => {
                 let title = arguments.join(" ");
                 if title.is_empty() {
-                    return Err(ParseCommandError::NoArgumentsForAdd);
+                    return Err(ParseCommandError::NoArgumentsForAdd); // Returning bypasses Ok-wrapping.
                 }
 
                 Self::AddMovie(title)
@@ -93,6 +95,7 @@ impl FromStr for Command {
                     return Err(ParseCommandError::NoArgumentsForRemove);
                 }
 
+                // Try to parse the first argument to u32. If that is not possible assume it's a title instead of an id.
                 if let Ok(n) = argument.parse::<u32>() {
                     Self::RemoveMovieById(n)
                 } else {
@@ -100,16 +103,18 @@ impl FromStr for Command {
                 }
             }
             EDIT_MOVIE | EDIT_MOVIE_SHORT => {
-                // first should be number
-                // second is title
                 if arguments.len() <= 2 {
                     return Err(ParseCommandError::NotEnoughArgumentsForEdit);
                 }
 
                 let (id, title) = arguments.split_at(1);
+                // We know arguments has at least 2 elements and we split the first off into id.
+                // Thus, id has exactly one element at [0].
                 let id = id[0];
+                // And title has at least one element.
                 let title = title.join(" ");
 
+                // Id needs to be a u32.
                 if let Ok(n) = id.parse::<u32>() {
                     Self::EditMovie(n, title)
                 } else {

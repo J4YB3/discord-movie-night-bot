@@ -144,7 +144,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
                 );
             }
         },
-        Quit => todo!(),
+        Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
 
