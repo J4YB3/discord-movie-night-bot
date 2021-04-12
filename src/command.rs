@@ -1,6 +1,4 @@
-use std::{ops::Not, str::FromStr};
-
-use itertools::Itertools;
+use std::{fmt, str::FromStr};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
@@ -10,7 +8,7 @@ pub enum Command {
     RemoveMovieById(u32),
     EditMovie(u32, String),
     ShowWatchlist,
-    Help,
+    Help(SimpleCommand),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -21,6 +19,48 @@ pub enum ParseCommandError {
     NoArgumentsForRemove,
     NotEnoughArgumentsForEdit,
     WrongArgumentForEdit,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SimpleCommand {
+    General,
+    Quit,
+    Add,
+    Remove,
+    Edit,
+    Show,
+    Help,
+    Unknown(String),
+}
+
+impl From<&str> for SimpleCommand {
+    fn from(s: &str) -> Self {
+        match s {
+            "" => Self::General,
+            QUIT => Self::Quit,
+            ADD_MOVIE | ADD_MOVIE_SHORT => Self::Add,
+            REMOVE_MOVIE | REMOVE_MOVIE_SHORT => Self::Remove,
+            EDIT_MOVIE | EDIT_MOVIE_SHORT => Self::Edit,
+            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::Show,
+            HELP | HELP_SHORT => Self::Help,
+            st => Self::Unknown(String::from(st)),
+        }
+    }
+}
+
+impl fmt::Display for SimpleCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::General => write!(f, ""),
+            Self::Quit => write!(f, "{}", QUIT),
+            Self::Add => write!(f, "{}", ADD_MOVIE),
+            Self::Remove => write!(f, "{}", REMOVE_MOVIE),
+            Self::Edit => write!(f, "{}", EDIT_MOVIE),
+            Self::Show => write!(f, "{}", SHOW_WATCH_LIST),
+            Self::Help => write!(f, "{}", HELP),
+            Self::Unknown(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 impl FromStr for Command {
@@ -36,16 +76,16 @@ impl FromStr for Command {
         let (command, arguments) = input.split_at(1);
 
         Ok(match command[0] {
-            QUIT => Command::Quit,
-            HELP | HELP_SHORT => Command::Help,
-            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Command::ShowWatchlist,
+            QUIT => Self::Quit,
+            HELP | HELP_SHORT => Self::Help(SimpleCommand::from(arguments.join(" ").as_str())),
+            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::ShowWatchlist,
             ADD_MOVIE | ADD_MOVIE_SHORT => {
                 let title = arguments.join(" ");
                 if title.is_empty() {
                     return Err(ParseCommandError::NoArgumentsForAdd);
                 }
 
-                Command::AddMovie(title)
+                Self::AddMovie(title)
             }
             REMOVE_MOVIE | REMOVE_MOVIE_SHORT => {
                 let argument = arguments.join(" ");
@@ -54,9 +94,9 @@ impl FromStr for Command {
                 }
 
                 if let Ok(n) = argument.parse::<u32>() {
-                    Command::RemoveMovieById(n)
+                    Self::RemoveMovieById(n)
                 } else {
-                    Command::RemoveMovieByTitle(argument)
+                    Self::RemoveMovieByTitle(argument)
                 }
             }
             EDIT_MOVIE | EDIT_MOVIE_SHORT => {
@@ -71,7 +111,7 @@ impl FromStr for Command {
                 let title = title.join(" ");
 
                 if let Ok(n) = id.parse::<u32>() {
-                    Command::EditMovie(n, title)
+                    Self::EditMovie(n, title)
                 } else {
                     return Err(ParseCommandError::WrongArgumentForEdit);
                 }
@@ -81,9 +121,19 @@ impl FromStr for Command {
     }
 }
 
-// pub fn splitn<'a, P>(&'a self, n: usize, pat: P) -> SplitN<'a, P>ⓘ
-// where
-//     P: Pattern<'a>,
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AddMovie(title) => write!(f, "!{} {}", ADD_MOVIE, title),
+            Self::Quit => write!(f, "!{}", QUIT),
+            Self::RemoveMovieByTitle(title) => write!(f, "!{} {}", REMOVE_MOVIE, title),
+            Self::RemoveMovieById(id) => write!(f, "!{} {}", REMOVE_MOVIE, id),
+            Self::EditMovie(id, title) => write!(f, "!{} {} {}", EDIT_MOVIE, id, title),
+            Self::ShowWatchlist => write!(f, "!{}", SHOW_WATCH_LIST),
+            Self::Help(sc) => write!(f, "!{} {}", HELP, sc),
+        }
+    }
+}
 
 // Command, Usage | Description
 const QUIT: &str = "quit"; // !quit | Quits the bot and saves all changes
@@ -102,12 +152,12 @@ const HELP_SHORT: &str = "h";
 mod tests {
     use std::str::FromStr;
 
-    use crate::commands::{
+    use crate::command::{
         ADD_MOVIE, ADD_MOVIE_SHORT, EDIT_MOVIE, EDIT_MOVIE_SHORT, HELP, HELP_SHORT, QUIT,
         REMOVE_MOVIE, REMOVE_MOVIE_SHORT, SHOW_WATCH_LIST, SHOW_WATCH_LIST_SHORT,
     };
 
-    use super::{Command, ParseCommandError};
+    use super::{Command, ParseCommandError, SimpleCommand};
 
     const TITLE: &str = "Cars 2";
     const ID: &str = "123";
@@ -169,9 +219,9 @@ mod tests {
     #[test]
     fn test_help() {
         let c = Command::from_str(HELP).unwrap();
-        assert_eq!(c, Command::Help);
+        assert_eq!(c, Command::Help(SimpleCommand::General));
         let c = Command::from_str(HELP_SHORT).unwrap();
-        assert_eq!(c, Command::Help);
+        assert_eq!(c, Command::Help(SimpleCommand::General));
     }
 
     #[test]

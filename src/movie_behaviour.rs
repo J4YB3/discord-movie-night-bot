@@ -1,11 +1,12 @@
-use discord::{model as Model, Discord};
+use discord::{model as Model};
 use chrono::DateTime;
 use std::collections::HashMap;
 use itertools::Itertools;
 use std::cmp::Ordering;
-use crate::commands;
+use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, COLOR_BOT};
 
 #[derive(Eq, Clone)]
+#[allow(dead_code)]
 pub enum MovieStatus {
     NotWatched,
     Watched,
@@ -79,7 +80,7 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
                 )
                 .as_str()
             )
-            .color(commands::COLOR_ERROR)
+            .color(COLOR_ERROR)
         );
     } else {
         let new_entry = WatchListEntry {
@@ -103,7 +104,7 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
                     title
                 ).as_str()
             )
-            .color(commands::COLOR_SUCCESS)
+            .color(COLOR_SUCCESS)
         );
     }
 }
@@ -125,7 +126,7 @@ pub fn remove_movie_by_title(bot_data: &mut crate::BotData, title: &str) {
                 |embed| embed.description(
                     format!("A movie with the title **{}** was not found.", title).as_str(),
                 )
-                .color(commands::COLOR_ERROR)
+                .color(COLOR_ERROR)
             );
         }
     }
@@ -155,7 +156,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                             watch_list_entry.timestamp.format("%A, %d.%m.%Y")
                         ).as_str(),
                     )
-                    .color(commands::COLOR_WARNING)
+                    .color(COLOR_WARNING)
                 );
                 let _ = bot_data.watch_list.remove(&id);
             } else if user_is_admin {
@@ -171,7 +172,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                             watch_list_entry.user_id
                         ).as_str(),
                     )
-                    .color(commands::COLOR_WARNING)
+                    .color(COLOR_WARNING)
                 );
                 let _ = bot_data.watch_list.remove(&id);
             } else {
@@ -187,7 +188,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                             watch_list_entry.user_id
                         ).as_str(),
                     )
-                    .color(commands::COLOR_WARNING)
+                    .color(COLOR_WARNING)
                 );
             }
             
@@ -199,7 +200,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                 |embed| embed.description(
                     format!("A movie with the id `{:0>4}` was not found.", id).as_str(),
                 )
-                .color(commands::COLOR_ERROR)
+                .color(COLOR_ERROR)
             );
         }
     }
@@ -245,7 +246,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                             updated_entry.timestamp.format("%A, %d.%m.%Y")
                         ).as_str()
                     )
-                    .color(commands::COLOR_SUCCESS)
+                    .color(COLOR_SUCCESS)
                 );
                 let _ = bot_data.watch_list.insert(id, updated_entry);
             } else if user_is_admin {
@@ -275,7 +276,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                             updated_entry.timestamp.format("%A, %d.%m.%Y")
                         ).as_str()
                     )
-                    .color(commands::COLOR_SUCCESS)
+                    .color(COLOR_SUCCESS)
                 );
                 let _ = bot_data.watch_list.insert(id, updated_entry);
             } else {
@@ -285,7 +286,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                     |embed| embed.description(
                         format!("Insufficient permissions to edit the movie **{}** added by <@{}>.", watch_list_entry_title, watch_list_entry.user_id).as_str(),
                     )
-                    .color(commands::COLOR_ERROR)
+                    .color(COLOR_ERROR)
                 );
             }
             
@@ -297,7 +298,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                 |embed| embed.description(
                     format!("A movie with the id `{:0>4}` was not found.", id).as_str(),
                 )
-                .color(commands::COLOR_ERROR)
+                .color(COLOR_ERROR)
             );
         }
     }
@@ -346,7 +347,7 @@ pub fn show_watch_list(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("Watch list").description(watch_list_string.as_str()).color(commands::COLOR_BOT)
+        |embed| embed.title("Watch list").description(watch_list_string.as_str()).color(COLOR_BOT)
     );
 }
 
