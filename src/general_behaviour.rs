@@ -1,4 +1,4 @@
-use crate::commands;
+use crate::COLOR_INFORMATION;
 
 /**
  * Show a basic embedded message containing all available commands grouped by functionality
@@ -19,12 +19,12 @@ pub fn show_help(bot_data: &crate::BotData) {
     `add_movie`
     `edit_movie`
     `remove_movie`
-    `watchlist`";
+    `watch_list`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Available commands").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Available commands").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -51,7 +51,7 @@ pub fn show_help_help(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Help - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Help - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -76,7 +76,7 @@ pub fn show_help_quit(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Quit - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Quit - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -101,7 +101,7 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Add movie - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Add movie - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -127,7 +127,7 @@ pub fn show_help_edit_movie(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Edit movie - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Edit movie - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -154,7 +154,7 @@ pub fn show_help_remove_movie(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Remove movie - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Remove movie - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -168,17 +168,17 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
     "Shows the watch list sorted by user and then by ID
     
     **Usage**
-    !watchlist
+    !watch_list
     
     **Example usage**
-    !watchlist
+    !watch_list
     
     **Aliases**
-    `watchlist`, `wl`";
+    `watch_list`, `wl`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Watch list - Help").description(help_str).color(commands::COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Watch list - Help").description(help_str).color(COLOR_INFORMATION)
     );
 }
