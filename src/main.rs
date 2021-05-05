@@ -1,4 +1,4 @@
-extern crate discord_data;
+extern crate external_data;
 use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
 use std::{collections::HashMap, str::FromStr};
 use commands::{Command, ParseCommandError, SimpleCommand};
@@ -26,7 +26,7 @@ const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 fn main() {
     let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
 
-    let bot = Discord::from_bot_token(discord_data::TOKEN).expect("Bot creation from token failed");
+    let bot = Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed");
 
     let (mut connection, ready_event) = bot
         .connect()

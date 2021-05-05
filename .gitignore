@@ -19,6 +19,6 @@ Cargo.lock
 *.code-workspace
 
 ### added manually ###
-/discord_data/src/lib.rs
+/external_data/src/lib.rs
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode,rust

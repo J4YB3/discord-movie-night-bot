@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 discord = { git = "https://github.com/SpaceManiac/discord-rs" }
-discord_data = { path = "discord_data" }
+external_data = { path = "external_data" }
 chrono = "0.4.19"
 itertools = "0.10.0"
