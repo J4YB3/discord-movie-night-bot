@@ -5,6 +5,7 @@ use itertools::Itertools;
 use std::cmp::Ordering;
 use crate::commands;
 use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, COLOR_BOT};
+use crate::general_behaviour::timestamp_to_string;
 
 #[derive(Eq, Clone)]
 pub enum MovieStatus {
@@ -74,9 +75,9 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
             "",
             |embed| embed
             .description(
-                format!("**{}** has already added this movie on *{}*", 
+                format!("**{}** hat diesen Film bereits am *{}* hinzugefügt.", 
                     previous_entry.user,
-                    previous_entry.timestamp.format("%A, %d.%m.%Y"),
+                    timestamp_to_string(&previous_entry.timestamp),
                 )
                 .as_str()
             )
@@ -99,7 +100,7 @@ pub fn add_movie(bot_data: &mut crate::BotData, title: &str) {
             message.channel_id,
             "",
             |embed| embed.description(
-                format!("Added movie to the watch list.\n`{:0>4}` :white_medium_square: **{}**", 
+                format!("Der Film wurde zur Liste hinzugefügt.\n`{:0>4}` :white_medium_square: **{}**", 
                     bot_data.next_movie_id - 1, 
                     title
                 ).as_str()
@@ -124,7 +125,7 @@ pub fn remove_movie_by_title(bot_data: &mut crate::BotData, title: &str) {
                 message.channel_id,
                 "",
                 |embed| embed.description(
-                    format!("A movie with the title **{}** was not found.", title).as_str(),
+                    format!("Ein Film mit dem Titel **{}** konnte nicht in der Liste gefunden werden.", title).as_str(),
                 )
                 .color(COLOR_ERROR)
             );
@@ -149,11 +150,12 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Removed movie\n`{:0>4}` {} **{}** | added on *{}* by yourself", 
+                        format!("Film entfernt. Senk ju for trevelling wis Deutsche Bahn. Ach ne das war falsch :sweat_smile:
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}* von dir selbst", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
-                            watch_list_entry.timestamp.format("%A, %d.%m.%Y")
+                            timestamp_to_string(&watch_list_entry.timestamp)
                         ).as_str(),
                     )
                     .color(COLOR_WARNING)
@@ -164,11 +166,11 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Removed movie\n`{:0>4}` {} **{}** | added on *{}* by <@{}>", 
+                        format!("Film entfernt. Bitte beehren Sie uns bald wieder.\n`{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
-                            watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
+                            timestamp_to_string(&watch_list_entry.timestamp),
                             watch_list_entry.user_id
                         ).as_str(),
                     )
@@ -180,11 +182,12 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Insufficient permissions to remove the movie\n`{:0>4}` {} **{}** | added on *{}* by <@{}>", 
+                        format!("Du hat nicht genügend Rechte um den Film zu entfernen. Klagen bitte an das Verfassungsgericht.
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
-                            watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
+                            timestamp_to_string(&watch_list_entry.timestamp),
                             watch_list_entry.user_id
                         ).as_str(),
                     )
@@ -198,7 +201,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                 message.channel_id,
                 "",
                 |embed| embed.description(
-                    format!("A movie with the id `{:0>4}` was not found.", id).as_str(),
+                    format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
                 )
                 .color(COLOR_ERROR)
             );
@@ -229,21 +232,21 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                 let _ = bot_data.bot.send_embed(
                     message.channel_id,
                     "",
-                    |embed| embed.title("Changed movie")
+                    |embed| embed.title("Filmeintrag ändern")
                     .description(
                         format!("
-                        **from**
-                        `{:0>4}` {} **{}** | added on *{}*\n
-                        **to**
-                        `{:0>4}` {} **{}** | added on *{}*", 
+                        **von**
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}*\n
+                        **zu**
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}*", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
-                            watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
+                            timestamp_to_string(&watch_list_entry.timestamp),
                             id, 
                             updated_entry.status.get_emoji(), 
                             updated_entry.movie_title,
-                            updated_entry.timestamp.format("%A, %d.%m.%Y")
+                            timestamp_to_string(&updated_entry.timestamp),
                         ).as_str()
                     )
                     .color(COLOR_SUCCESS)
@@ -259,21 +262,21 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                 let _ = bot_data.bot.send_embed(
                     message.channel_id,
                     "",
-                    |embed| embed.title(format!("Changed movie added by <@{}>", updated_entry.user_id).as_str())
+                    |embed| embed.title(format!("Film hinzugefügt von <@{}> wurde geändert.", updated_entry.user_id).as_str())
                     .description(
                         format!("
-                        **from**
-                        `{:0>4}` {} **{}** | added on *{}*\n
-                        **to**
-                        `{:0>4}` {} **{}** | added on *{}*", 
+                        **von**
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}*\n
+                        **zu**
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}*", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
                             watch_list_entry.movie_title,
-                            watch_list_entry.timestamp.format("%A, %d.%m.%Y"),
+                            timestamp_to_string(&watch_list_entry.timestamp),
                             id, 
                             updated_entry.status.get_emoji(), 
                             updated_entry.movie_title,
-                            updated_entry.timestamp.format("%A, %d.%m.%Y")
+                            timestamp_to_string(&updated_entry.timestamp)
                         ).as_str()
                     )
                     .color(COLOR_SUCCESS)
@@ -284,9 +287,16 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                     message.channel_id,
                     "",
                     |embed| embed.description(
-                        format!("Insufficient permissions to edit the movie **{}** added by <@{}>.", watch_list_entry_title, watch_list_entry.user_id).as_str(),
+                        format!("Du hat nicht genügend Rechte um den Film zu entfernen. Klagen bitte an das Verfassungsgericht.
+                        `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
+                            id, 
+                            watch_list_entry.status.get_emoji(), 
+                            watch_list_entry.movie_title,
+                            timestamp_to_string(&watch_list_entry.timestamp),
+                            watch_list_entry.user_id
+                        ).as_str(),
                     )
-                    .color(COLOR_ERROR)
+                    .color(COLOR_WARNING)
                 );
             }
             
@@ -296,7 +306,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                 message.channel_id,
                 "",
                 |embed| embed.description(
-                    format!("A movie with the id `{:0>4}` was not found.", id).as_str(),
+                    format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
                 )
                 .color(COLOR_ERROR)
             );
@@ -326,19 +336,19 @@ pub fn show_watch_list(bot_data: &crate::BotData) {
     let mut watch_list_string: String = String::new();
 
     if bot_data.watch_list.len() == 1 {
-        watch_list_string += format!("There is currently **{}** movie on the list\n\n", bot_data.watch_list.len()).as_str();
+        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n\n", bot_data.watch_list.len()).as_str();
     } else {
-        watch_list_string += format!("There are currently **{}** movies on the list\n\n", bot_data.watch_list.len()).as_str();
+        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n\n", bot_data.watch_list.len()).as_str();
     }
         
     // For every user
     for (user, entry_vector) in user_movies.iter().sorted() {
-        watch_list_string += format!("Movies added by **{}**\n", user).as_str();
+        watch_list_string += format!("Filme hinzugefügt von **{}**\n", user).as_str();
         
         // For every movie entry
         for (id, entry) in entry_vector {
             watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
-            watch_list_string += format!(" {} **{}** | added on *{}*\n", entry.status.get_emoji(), entry.movie_title, entry.timestamp.format("%A, %d.%m.%Y")).as_str();
+            watch_list_string += format!(" {} **{}** | hinzugefügt am *{}*\n", entry.status.get_emoji(), entry.movie_title, timestamp_to_string(&entry.timestamp)).as_str();
         }
 
         watch_list_string += "\n";

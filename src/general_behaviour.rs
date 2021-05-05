@@ -1,21 +1,41 @@
 use crate::COLOR_INFORMATION;
 
 /**
+ * Takes a timestamp from the chrono package and converts it to german date format,
+ * translating the english weekday to german in the process.
+ */
+pub fn timestamp_to_string(timestamp: &chrono::DateTime<chrono::FixedOffset>) -> String {
+    let date_format = timestamp.format("%d.%m.%Y");
+    let day = match format!("{}", timestamp.format("%A")).as_str() {
+        "Monday" => "Montag",
+        "Tuesday" => "Dienstag",
+        "Wednesday" => "Mittwoch",
+        "Thursday" => "Donnerstag",
+        "Friday" => "Freitag",
+        "Saturday" => "Samstag",
+        "Sunday" => "Sonntag",
+        _ => "",
+    };
+
+    format!("{}, {}", day, date_format).to_string()
+}
+
+/**
  * Show a basic embedded message containing all available commands grouped by functionality
  */
 pub fn show_help(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help function failed.");
 
     let help_str =
-    "Some commands have aliases that are shorter than the actual command.
-    For more information on each command, use !help <command>
-    **Example**: !help watchlist
+    "Einige Kommandos besitzen Aliase, die kürzer als das normale Kommando sind.
+    Für mehr Informationen zu jedem Kommando, benutze bitte !help <Kommando>
+    **Beispiel**: !help watch_list
 
-    **General**
+    **Allgemein**
     `help`
     `quit`
     
-    **Movies**
+    **Filme**
     `add_movie`
     `edit_movie`
     `remove_movie`
@@ -24,7 +44,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Available commands").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Verfügbare Kommandos").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -35,23 +55,23 @@ pub fn show_help_help(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_help function failed.");
 
     let help_str =
-    "Shows general help and a list of all commands
+    "Zeigt eine allgemeine Hilfe, sowie eine Liste aller Kommandos an.
     
-    **Usage**
+    **Nutzung**
     !help
-    !help <command>
+    !help <Kommando>
     
-    **Example usage**
+    **Beispiel**
     !help
     !help add_movie
     
-    **Aliases**
+    **Aliase**
     `help`, `h`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Help - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Help - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -62,21 +82,21 @@ pub fn show_help_quit(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_quit function failed.");
 
     let help_str =
-    "Shuts down the bot, saving all data in files.
+    "Beendet den Bot und speichert alle relevanten Daten in Dateien auf dem Host-Rechner.
     
-    **Usage**
+    **Nutzung**
     !quit
     
-    **Example usage**
+    **Beispiel**
     !quit
     
-    **Aliases**
+    **Aliase**
     `quit`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Quit - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Quit - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -87,21 +107,21 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_add_movie function failed.");
 
     let help_str = 
-    "Adds a movie to the watch list
+    "Fügt einen Film zur Filmliste hinzu.
     
-    **Usage**
-    !add_movie <movie_title>
+    **Nutzung**
+    !add_movie <Filmtitel>
     
-    **Example usage**
+    **Beispiel**
     !add_movie Forrest Gump
     
-    **Aliases**
+    **Aliase**
     `add_movie`, `am`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Add movie - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Add movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -112,22 +132,22 @@ pub fn show_help_edit_movie(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_help function failed.");
 
     let help_str =
-    "Lets you edit the title of previously added movies. To get the ID of the movie, use the !watchlist command
+    "Lässt dich den Titel eines zuvor hinzugefügten Films ändern. Um die ID eines Films herauszufinden, benutze das Kommando !watch_list.
     
-    **Usage**
-    !edit_movie <id> <new_title>
+    **Nutzung**
+    !edit_movie <ID> <Neuer Titel>
     
-    **Example usage**
+    **Beispiel**
     !edit_movie 3 Star Wars: Episode IV - A New Hope
     !edit_movie 0003 Interstellar
     
-    **Aliases**
+    **Aliase**
     `edit_movie`, `em`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Edit movie - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Edit movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -138,23 +158,23 @@ pub fn show_help_remove_movie(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_remove_movie function failed.");
 
     let help_str =
-    "Lets you remove a movie from the watch list.
+    "Ermöglicht es dir einen Film von der Filmliste zu entfernen.
     
-    **Usage**
-    !remove_movie <id>
-    !remove_movie <movie_title>
+    **Nutzung**
+    !remove_movie <ID>
+    !remove_movie <Filmtitel>
     
-    **Example usage**
+    **Beispiel**
     !remove_movie 3
     !remove_movie Interstellar
     
-    **Aliases**
+    **Aliase**
     `remove_movie`, `rm`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Remove movie - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Remove movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 
@@ -165,20 +185,20 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_watchlist function failed.");
 
     let help_str =
-    "Shows the watch list sorted by user and then by ID
+    "Zeigt die Filmliste, sortiert nach Nutzer und dann nach ID, an.
     
-    **Usage**
+    **Nutzung**
     !watch_list
     
-    **Example usage**
+    **Beispiel**
     !watch_list
     
-    **Aliases**
+    **Aliase**
     `watch_list`, `wl`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Watch list - Help").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Watch list - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }

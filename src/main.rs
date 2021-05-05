@@ -78,7 +78,7 @@ fn main() {
                     let _ = bot_data.bot.send_embed(
                         message.channel_id,
                         "",
-                        |embed| embed.description("Quitting. Bye bye.").color(COLOR_BOT)
+                        |embed| embed.description("Ich beende mich dann mal. Tschüss. :wave:").color(COLOR_BOT)
                     );
                     break;
                 }
@@ -141,7 +141,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
                     |embed| {
                         embed
                             .description(
-                                format!("There is no command `{}` to show help for", parameters)
+                                format!("Das Kommando `{}` existiert nicht. Deshalb kann ich dir leider keine Hilfe anzeigen.", parameters)
                                     .as_str(),
                             )
                             .color(COLOR_ERROR)
@@ -161,7 +161,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
             let message = bot_data.message.clone().unwrap();
             let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
                 embed
-                    .description(format!("Unknown command `{}`", message.content).as_str())
+                    .description(format!("Unbekanntes Kommando `{}`. Vielleicht vertippt? :see_no_evil:", message.content).as_str())
                     .color(COLOR_ERROR)
             });
         }
