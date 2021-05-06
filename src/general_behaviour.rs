@@ -202,3 +202,49 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
         |embed| embed.title(":information_source: Watch list - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
+
+/**
+ * Shows help on the prefix command
+ */
+pub fn show_help_prefix(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_prefix function failed.");
+
+    let help_str =
+    "Setzt einen neuen benutzerdefinierten Präfix für alle Kommandos. Es sind nur einzelne Zeichen als Präfix erlaubt.
+    
+    **Nutzung**
+    !prefix <Neuer Präfix>
+    
+    **Beispiel**
+    !prefix _
+    
+    **Aliase**
+    `prefix`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Watch list - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Sets a new custom prefix for all commands
+ */
+pub fn set_new_prefix(bot_data: &mut crate::BotData, new_prefix: char) {
+    let message = bot_data.message.as_ref().expect("Passing message to set_new_prefix function failed.");
+
+    bot_data.custom_prefix = new_prefix;
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Neuer Präfix").description(
+            format!(
+                "Der Präfix für alle Kommandos wurde zu ``{}`` geändert.
+                Bitte benutze nur noch diesen Präfix um auf den Bot zuzugreifen. Der zuvor genutzte Präfix ist nun nicht mehr verfügbar.", 
+                new_prefix
+            ).as_str()
+        ).color(COLOR_INFORMATION)
+    );
+}

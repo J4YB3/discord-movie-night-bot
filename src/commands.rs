@@ -9,6 +9,7 @@ pub enum Command {
     EditMovie(u32, String),
     ShowWatchlist,
     Help(SimpleCommand),
+    Prefix(char),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -19,6 +20,8 @@ pub enum ParseCommandError {
     NoArgumentsForRemove,
     NotEnoughArgumentsForEdit,
     WrongArgumentsForEdit,
+    NoArgumentsForPrefix,
+    PrefixIsNotAChar,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -30,12 +33,12 @@ pub enum SimpleCommand {
     Edit,
     Show,
     Help,
+    Prefix,
     Unknown(String),
 }
 
 impl From<&str> for SimpleCommand {
     fn from(s: &str) -> Self {
-        println!("String in from function was {}", s);
         match s {
             "" => Self::General,
             QUIT => Self::Quit,
@@ -44,6 +47,7 @@ impl From<&str> for SimpleCommand {
             EDIT_MOVIE | EDIT_MOVIE_SHORT => Self::Edit,
             SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::Show,
             HELP | HELP_SHORT => Self::Help,
+            PREFIX => Self::Prefix,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -59,6 +63,7 @@ impl fmt::Display for SimpleCommand {
             Self::Edit => write!(f, "{}", EDIT_MOVIE),
             Self::Show => write!(f, "{}", SHOW_WATCH_LIST),
             Self::Help => write!(f, "{}", HELP),
+            Self::Prefix => write!(f, "{}", PREFIX),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -123,7 +128,23 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForEdit);
                 }
-            }
+            },
+            PREFIX => {
+                // there should be only one argument, all others will be ignored
+                // 
+                if arguments.len() <= 0 {
+                    return Err(ParseCommandError::NoArgumentsForPrefix);
+                }
+
+                let (new_prefix, _) = arguments.split_at(1);
+                let new_prefix = new_prefix[0];
+
+                if let Ok(new_prefix_char) = new_prefix.parse::<char>() {
+                    Self::Prefix(new_prefix_char)
+                } else {
+                    return Err(ParseCommandError::PrefixIsNotAChar);
+                }
+            },
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -139,6 +160,7 @@ impl Command {
             Self::EditMovie(id, title) => format!("{}{} {} {}", bot_data.custom_prefix, EDIT_MOVIE, id, title),
             Self::ShowWatchlist => format!("{}{}", bot_data.custom_prefix, SHOW_WATCH_LIST),
             Self::Help(sc) => format!("{}{} {}", bot_data.custom_prefix, HELP, sc),
+            Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
         }
     }
 }
@@ -155,3 +177,4 @@ pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list | Shows the full 
 pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl | Short form for watch_list
 pub const HELP: &str = "help"; // !help | Shows a list of available commandsa
 pub const HELP_SHORT: &str = "h";
+pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character

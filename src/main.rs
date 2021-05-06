@@ -134,6 +134,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Edit => general_behaviour::show_help_edit_movie(bot_data),
             SimpleCommand::Remove => general_behaviour::show_help_remove_movie(bot_data),
             SimpleCommand::Show => general_behaviour::show_help_watchlist(bot_data),
+            SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -149,6 +150,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
                 );
             }
         },
+        Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -169,6 +171,8 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NoArgumentsForRemove => general_behaviour::show_help_remove_movie(bot_data),
         NotEnoughArgumentsForEdit | WrongArgumentsForEdit => {
             general_behaviour::show_help_edit_movie(bot_data)
-        }
+        },
+        NoArgumentsForPrefix => general_behaviour::show_help_prefix(bot_data),
+        PrefixIsNotAChar => general_behaviour::show_help_prefix(bot_data),
     }
 }
