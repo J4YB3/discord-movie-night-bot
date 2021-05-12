@@ -125,7 +125,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         EditMovie(id, new_title) => {
             movie_behaviour::edit_movie_by_id(bot_data, id, new_title.as_str())
         }
-        ShowWatchlist => movie_behaviour::show_watch_list(bot_data),
+        ShowWatchlist(order) => movie_behaviour::show_watch_list(bot_data, order),
         Help(simple_command) => match simple_command {
             SimpleCommand::General => general_behaviour::show_help(bot_data),
             SimpleCommand::Help => general_behaviour::show_help_help(bot_data),
@@ -174,5 +174,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         },
         NoArgumentsForPrefix => general_behaviour::show_help_prefix(bot_data),
         PrefixIsNotAChar => general_behaviour::show_help_prefix(bot_data),
+        WrongArgumentForWatchList => general_behaviour::show_help_watchlist(bot_data),
     }
 }

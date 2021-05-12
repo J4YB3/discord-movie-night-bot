@@ -185,13 +185,18 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_watchlist function failed.");
 
     let help_str =
-    "Zeigt die Filmliste, sortiert nach Nutzer und dann nach ID, an.
+    "Zeigt die Filmliste an.
+    Mit dem Sortierparameter `random` wird die Liste in beliebiger Reihenfolge angezeigt.
+    Mit dem Sortierparameter `user` wird die Liste nach Nutzer sortiert, anschließend nach ID.
+    Wird der Parameter weggelassen wird die Liste in beliebiger Reihenfolge angezeigt.
     
     **Nutzung**
-    !watch_list
+    !watch_list <Optional: Sortierung>
     
     **Beispiel**
     !watch_list
+    !watch_list user
+    !watch_list random
     
     **Aliase**
     `watch_list`, `wl`";

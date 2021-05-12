@@ -7,7 +7,7 @@ pub enum Command {
     RemoveMovieByTitle(String),
     RemoveMovieById(u32),
     EditMovie(u32, String),
-    ShowWatchlist,
+    ShowWatchlist(String),
     Help(SimpleCommand),
     Prefix(char),
 }
@@ -22,6 +22,7 @@ pub enum ParseCommandError {
     WrongArgumentsForEdit,
     NoArgumentsForPrefix,
     PrefixIsNotAChar,
+    WrongArgumentForWatchList,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -88,7 +89,15 @@ impl FromStr for Command {
         Ok(match &command[0][1..] {
             QUIT => Self::Quit,
             HELP | HELP_SHORT => Self::Help(SimpleCommand::from(arguments.join(" ").as_str())),
-            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::ShowWatchlist,
+            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => {
+                let argument = arguments.join(" ").as_str().to_lowercase();
+
+                if argument != "random" && argument != "user" && argument != "" {
+                    return Err(ParseCommandError::WrongArgumentForWatchList);
+                }
+
+                Self::ShowWatchlist(argument)
+            },
             ADD_MOVIE | ADD_MOVIE_SHORT => {
                 let title = arguments.join(" ");
                 if title.is_empty() {
@@ -158,7 +167,7 @@ impl Command {
             Self::RemoveMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, title),
             Self::RemoveMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, id),
             Self::EditMovie(id, title) => format!("{}{} {} {}", bot_data.custom_prefix, EDIT_MOVIE, id, title),
-            Self::ShowWatchlist => format!("{}{}", bot_data.custom_prefix, SHOW_WATCH_LIST),
+            Self::ShowWatchlist(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_WATCH_LIST, order),
             Self::Help(sc) => format!("{}{} {}", bot_data.custom_prefix, HELP, sc),
             Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
         }

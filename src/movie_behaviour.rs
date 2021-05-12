@@ -17,6 +17,9 @@ pub enum MovieStatus {
 }
 
 impl MovieStatus {
+    /**
+     * Returns the string slice containing the emoji corresponding to this status
+     */
     fn get_emoji(&self) -> &str {
         match self {
             MovieStatus::NotWatched => ":white_medium_square:",
@@ -25,6 +28,23 @@ impl MovieStatus {
             MovieStatus::Rewatch => ":recycle:",
             MovieStatus::Removed => ":red_square:"
         }
+    }
+
+    /**
+     * Returns true if a movie with this status should be shown on the watch list
+     */
+    fn is_watch_list_status(&self) -> bool {
+        match self {
+            MovieStatus::NotWatched | MovieStatus::Rewatch | MovieStatus::Unavailable => true,
+            _ => false,
+        }
+    }
+
+    /**
+     * Returns true if a movie with this status should be shown on the history
+     */
+    fn is_history_status(&self) -> bool {
+        !self.is_watch_list_status()
     }
 }
 
@@ -241,7 +261,7 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
                         `{:0>4}` {} **{}** | hinzugefügt am *{}*", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie_title,
+                            watch_list_entry_title,
                             timestamp_to_string(&watch_list_entry.timestamp),
                             id, 
                             updated_entry.status.get_emoji(), 
@@ -317,48 +337,94 @@ pub fn edit_movie_by_id(bot_data: &mut crate::BotData, id: u32, new_title: &str)
 /**
  * Formats the watch list hash map, formats it and sends it as an embedded message
  */
-pub fn show_watch_list(bot_data: &crate::BotData) {
+pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
     let message = bot_data.message.as_ref().expect("Passing message to show_watch_list function failed.");
 
-    // Create a hashmap that stores the user as key and a tuple containing the id and the watch list entry of every movie
-    let mut user_movies: HashMap<&String, Vec<(u32, &WatchListEntry)>> = HashMap::new();
-    for (id, entry) in bot_data.watch_list.iter().sorted() {
-        // Append the id, entry tuple to the user movie vector
-        if let Some(vector) = user_movies.get_mut(&entry.user) {
-            vector.push((*id, &entry));
-        }
-        // if the user got no movies yet create the vector and add the first tuple
-        else {
-            user_movies.insert(&entry.user, vec![(*id, entry)]);
-        }
-    }
-
     let mut watch_list_string: String = String::new();
-
-    if bot_data.watch_list.len() == 1 {
-        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n\n", bot_data.watch_list.len()).as_str();
+    let watch_list_count = count_watch_list_movies(bot_data);
+    if watch_list_count == 1 {
+        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n", watch_list_count).as_str();
     } else {
-        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n\n", bot_data.watch_list.len()).as_str();
+        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n", watch_list_count).as_str();
     }
-        
-    // For every user
-    for (user, entry_vector) in user_movies.iter().sorted() {
-        watch_list_string += format!("Filme hinzugefügt von **{}**\n", user).as_str();
-        
-        // For every movie entry
-        for (id, entry) in entry_vector {
-            watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
-            watch_list_string += format!(" {} **{}** | hinzugefügt am *{}*\n", entry.status.get_emoji(), entry.movie_title, timestamp_to_string(&entry.timestamp)).as_str();
+
+    if watch_list_count > 0 {
+        // If the ordering by user is demanded
+        if order == "user" {
+            watch_list_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
+
+            let user_movies = create_user_sorted_watch_list(bot_data);
+
+            // For every user
+            for (user, entry_vector) in user_movies.iter().sorted() {
+                watch_list_string += format!("Filme hinzugefügt von **{}**\n", user).as_str();
+                
+                // For every movie entry
+                for (id, entry) in entry_vector {
+                    watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
+                    watch_list_string += format!(" {} **{}** | hinzugefügt am *{}*\n", entry.status.get_emoji(), entry.movie_title, timestamp_to_string(&entry.timestamp)).as_str();
+                }
+
+                watch_list_string += "\n";
+            }
+        } 
+        // If the ordering should be random
+        else {
+            watch_list_string += format!("Die Filme werden in zufälliger Reihenfolge angezeigt.\n\n").as_str();
+
+            // For every movie entry
+            for (id, entry) in bot_data.watch_list.iter() {
+                if entry.status.is_watch_list_status() {
+                    watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
+                    watch_list_string += format!(" {} **{}** | hinzugefügt von **{}** am *{}*\n", entry.status.get_emoji(), entry.movie_title, entry.user, timestamp_to_string(&entry.timestamp)).as_str();
+                }
+            }
         }
-
-        watch_list_string += "\n";
     }
-
+    
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
         |embed| embed.title("Watch list").description(watch_list_string.as_str()).color(COLOR_BOT)
     );
+}
+
+/**
+ * Collects all movie entries from the watch list that have a watch list status
+ * and returns them in a new HashMap that contains the user as key.
+ */
+fn create_user_sorted_watch_list(bot_data: &crate::BotData) -> HashMap<&String, Vec<(u32, &WatchListEntry)>> {
+    // Create a hashmap that stores the user as key and a tuple containing the id and the watch list entry of every movie
+    let mut user_movies: HashMap<&String, Vec<(u32, &WatchListEntry)>> = HashMap::new();
+    for (id, entry) in bot_data.watch_list.iter().sorted() {
+        if entry.status.is_watch_list_status() {
+            // Append the id, entry tuple to the user movie vector
+            if let Some(vector) = user_movies.get_mut(&entry.user) {
+                vector.push((*id, &entry));
+            }
+            // if the user got no movies yet create the vector and add the first tuple
+            else {
+                user_movies.insert(&entry.user, vec![(*id, entry)]);
+            }
+        }
+    }
+
+    user_movies
+}
+
+/**
+ * Counts all movies from the list with watch list status and returns the count
+ */
+fn count_watch_list_movies(bot_data: &crate::BotData) -> u32 {
+    let mut count: u32 = 0;
+
+    for (_, entry) in bot_data.watch_list.iter() {
+        if entry.status.is_watch_list_status() {
+            count += 1;
+        }
+    }
+
+    count
 }
 
 /**
