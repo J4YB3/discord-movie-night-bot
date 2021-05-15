@@ -84,7 +84,10 @@ fn main() {
                 }
                 // Handle all other messages that start with the prefix
                 else if message.content.starts_with(bot_data.custom_prefix) {
-                    bot_data.message = Some(message);
+                    bot_data.message = Some(message.clone());
+                    
+                    // Indicate that the bot is processing the query
+                    let _ = bot_data.bot.broadcast_typing(message.channel_id);
                     call_behaviour(&mut bot_data);
                 }
             },
@@ -135,6 +138,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Remove => general_behaviour::show_help_remove_movie(bot_data),
             SimpleCommand::Show => general_behaviour::show_help_watchlist(bot_data),
             SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
+            SimpleCommand::History => general_behaviour::show_help_history(bot_data),
+            SimpleCommand::Status => general_behaviour::show_help_set_status(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -151,6 +156,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             }
         },
         Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
+        History(order) => movie_behaviour::show_history(bot_data, order),
+        SetStatus(id, status) => movie_behaviour::set_status(bot_data, id, status),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -175,5 +182,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NoArgumentsForPrefix => general_behaviour::show_help_prefix(bot_data),
         PrefixIsNotAChar => general_behaviour::show_help_prefix(bot_data),
         WrongArgumentForWatchList => general_behaviour::show_help_watchlist(bot_data),
+        WrongArgumentForHistory => general_behaviour::show_help_history(bot_data),
+        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => general_behaviour::show_help_set_status(bot_data),
     }
 }

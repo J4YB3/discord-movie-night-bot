@@ -10,6 +10,8 @@ pub enum Command {
     ShowWatchlist(String),
     Help(SimpleCommand),
     Prefix(char),
+    History(String),
+    SetStatus(u32, String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +25,9 @@ pub enum ParseCommandError {
     NoArgumentsForPrefix,
     PrefixIsNotAChar,
     WrongArgumentForWatchList,
+    WrongArgumentForHistory,
+    NotEnoughArgumentsForStatus,
+    WrongArgumentsForStatus,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,6 +40,8 @@ pub enum SimpleCommand {
     Show,
     Help,
     Prefix,
+    History,
+    Status,
     Unknown(String),
 }
 
@@ -49,6 +56,8 @@ impl From<&str> for SimpleCommand {
             SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::Show,
             HELP | HELP_SHORT => Self::Help,
             PREFIX => Self::Prefix,
+            SHOW_HISTORY | SHOW_HISTORY_SHORT => Self::History,
+            SET_STATUS | SET_STATUS_SHORT => Self::Status,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -65,6 +74,8 @@ impl fmt::Display for SimpleCommand {
             Self::Show => write!(f, "{}", SHOW_WATCH_LIST),
             Self::Help => write!(f, "{}", HELP),
             Self::Prefix => write!(f, "{}", PREFIX),
+            Self::History => write!(f, "{}", SHOW_HISTORY),
+            Self::Status => write!(f, "{}", SET_STATUS),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -90,7 +101,11 @@ impl FromStr for Command {
             QUIT => Self::Quit,
             HELP | HELP_SHORT => Self::Help(SimpleCommand::from(arguments.join(" ").as_str())),
             SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => {
-                let argument = arguments.join(" ").as_str().to_lowercase();
+                // Only one argument is expected. All others will be ignored
+                let mut argument = "".to_string();
+                if arguments.len() > 0 {
+                    argument = arguments[0].to_lowercase();
+                }
 
                 if argument != "random" && argument != "user" && argument != "" {
                     return Err(ParseCommandError::WrongArgumentForWatchList);
@@ -121,7 +136,7 @@ impl FromStr for Command {
             },
             EDIT_MOVIE | EDIT_MOVIE_SHORT => {
                 // first argument should be u32, second should be the new title
-                if arguments.len() <= 2 {
+                if arguments.len() < 2 {
                     return Err(ParseCommandError::NotEnoughArgumentsForEdit);
                 }
 
@@ -140,7 +155,6 @@ impl FromStr for Command {
             },
             PREFIX => {
                 // there should be only one argument, all others will be ignored
-                // 
                 if arguments.len() <= 0 {
                     return Err(ParseCommandError::NoArgumentsForPrefix);
                 }
@@ -154,6 +168,38 @@ impl FromStr for Command {
                     return Err(ParseCommandError::PrefixIsNotAChar);
                 }
             },
+            SHOW_HISTORY | SHOW_HISTORY_SHORT => {
+                // Only one argument expected. Others are ignored
+                let mut argument = "".to_string();
+                if arguments.len() > 0 {
+                    argument = arguments[0].to_lowercase();
+                }
+
+                if argument != "date" && argument != "user" && argument != "" {
+                    return Err(ParseCommandError::WrongArgumentForHistory);
+                }
+
+                Self::History(argument)
+            },
+            SET_STATUS | SET_STATUS_SHORT => {
+                // first argument should be u32, second should be the new status
+                if arguments.len() < 2 {
+                    return Err(ParseCommandError::NotEnoughArgumentsForStatus);
+                }
+
+                let (id, status) = arguments.split_at(1);
+                // We know arguments has at least 2 elements and we split the first off into id.
+                // Thus, id has exactly one element at [0].
+                let id = id[0];
+                // And status has at least one element.
+                let status = status[0];
+
+                if let Ok(n) = id.parse::<u32>() {
+                    Self::SetStatus(n, status.to_string())
+                } else {
+                    return Err(ParseCommandError::WrongArgumentsForStatus);
+                }
+            }
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -170,6 +216,8 @@ impl Command {
             Self::ShowWatchlist(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_WATCH_LIST, order),
             Self::Help(sc) => format!("{}{} {}", bot_data.custom_prefix, HELP, sc),
             Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
+            Self::History(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_HISTORY, order),
+            Self::SetStatus(id, status) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS, id, status),
         }
     }
 }
@@ -182,8 +230,12 @@ pub const REMOVE_MOVIE: &str = "remove_movie"; // !remove_movie <title|id> | Rem
 pub const REMOVE_MOVIE_SHORT: &str = "rm"; // !rm <title|id> | Short form for remove_movie
 pub const EDIT_MOVIE: &str = "edit_movie"; // !edit_movie <id> <new_title> | Changes the movie specified by its id to a new title
 pub const EDIT_MOVIE_SHORT: &str = "em"; // !em <id> <new_title> | Short form for edit_movie
-pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list | Shows the full watch list
-pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl | Short form for watch_list
-pub const HELP: &str = "help"; // !help | Shows a list of available commandsa
-pub const HELP_SHORT: &str = "h";
+pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list <optional: order> | Shows the full watch list
+pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl <optional: order> | Short form for watch_list
+pub const HELP: &str = "help"; // !help, !help <command> | Shows a list of available commands or help to one specific command
+pub const HELP_SHORT: &str = "h"; // !h, !h <command> | Short form for help
 pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
+pub const SHOW_HISTORY: &str = "history"; // !history <optional: order> | Shows a list of all movies that have been watched already or that have the status 'removed'
+pub const SHOW_HISTORY_SHORT: &str = "hs"; // !h <optional: order> | short form for history
+pub const SET_STATUS: &str = "set_status"; // !set_status <id> <movie_status> | Sets the status of a movie
+pub const SET_STATUS_SHORT: &str = "st"; // !st <id> <movie_status> | Sets the status of a movie

@@ -38,7 +38,9 @@ pub fn show_help(bot_data: &crate::BotData) {
     **Filme**
     `add_movie`
     `edit_movie`
+    `history`
     `remove_movie`
+    `set_status`
     `watch_list`";
 
     let _ = bot_data.bot.send_embed(
@@ -234,6 +236,67 @@ pub fn show_help_prefix(bot_data: &crate::BotData) {
 }
 
 /**
+ * Shows help on the prefix command
+ */
+pub fn show_help_history(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_history function failed.");
+
+    let help_str =
+    "Zeigt einen Verlauf aller bereits geschauten Filme an, sowie Filme die den Status *gelöscht* haben.
+    Mit dem Sortierparameter `date` wird die Liste nach Datum sortiert angezeigt.
+    Mit dem Sortierparameter `user` wird die Liste nach Nutzer sortiert, anschließend nach Datum.
+    Wird der Parameter weggelassen wird die Liste nach Datum sortiert angezeigt.
+    
+    **Nutzung**
+    !history <Optional: Sortierung>
+    
+    **Beispiel**
+    !history
+    !history date
+    !history user
+    
+    **Aliase**
+    `history`, `hs`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: History - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the prefix command
+ */
+pub fn show_help_set_status(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status function failed.");
+
+    let help_str =
+    "Setzt den Status eines Films. Der erste Wert gibt die ID des Films an. Der zweite den neuen Status.
+    Folgende Status sind verfügbar: `NotWatched`, `Watched`, `Unavailable`, `Rewatch`, `Removed`
+    Groß- und Kleinschreibung wird bei den Status ignoriert.
+    Die Status `Watched` und `Removed` führen dazu, dass ein Film von der Watch list entfernt wird.
+    Der Status `Unavailable` wird bei der Zählung der Filme pro Nutzer ignoriert.
+    
+    **Nutzung**
+    !set_status <ID> <Status>
+    
+    **Beispiel**
+    !set_status 3 Watched
+    !set_status 0010 unavailable
+    !set_status 20 REMOVED
+    
+    **Aliase**
+    `set_status`, `st`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Set Status - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
  * Sets a new custom prefix for all commands
  */
 pub fn set_new_prefix(bot_data: &mut crate::BotData, new_prefix: char) {
@@ -246,7 +309,7 @@ pub fn set_new_prefix(bot_data: &mut crate::BotData, new_prefix: char) {
         "",
         |embed| embed.title(":information_source: Neuer Präfix").description(
             format!(
-                "Der Präfix für alle Kommandos wurde zu ``{}`` geändert.
+                "Der Präfix für alle Kommandos wurde zu `{}` geändert.
                 Bitte benutze nur noch diesen Präfix um auf den Bot zuzugreifen. Der zuvor genutzte Präfix ist nun nicht mehr verfügbar.", 
                 new_prefix
             ).as_str()
