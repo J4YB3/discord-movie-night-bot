@@ -540,7 +540,11 @@ pub fn show_history(bot_data: &crate::BotData, order: String) {
                         entry.movie_title, 
                         entry.user, 
                         if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
-                        timestamp_to_string(&entry.added_timestamp)).as_str();
+                        timestamp_to_string(
+                            &entry.watched_or_removed_timestamp
+                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                        )
+                    ).as_str();
                 }
             }
         }
@@ -683,11 +687,102 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
     }
 }
 
+/** 
+ * If a custom date is given in the format DD.MM.YYYY converts it to a timestamp, saves this to the message
+ * and calls the set_status function with "watched" as status
+ */
+pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) {
+    if date.is_empty() {
+        set_status(bot_data, id, "Watched".to_string());
+    } else {
+        let message = bot_data.message.as_ref().expect("Passing message to set_status function failed.");
+        let date_with_utc = date.clone() + " 12:00:00.000 +0000";
+        if let Ok(datetime) = chrono::DateTime::parse_from_str(date_with_utc.as_str(), "%d.%m.%Y %H:%M:%S%.3f %z") {
+            let user_is_admin: bool = is_user_administrator(bot_data, message.author.id);
+
+            let new_status = MovieStatus::Watched;
+            
+            let movie = bot_data.watch_list.get(&id);
+
+            match movie {
+                Some(watch_list_entry) => {
+                    let original_movie_status = watch_list_entry.status.clone();
+
+                    // Only allow change of status if the user has the admin role
+                    if user_is_admin {
+                        let updated_entry = WatchListEntry {
+                            status: new_status.clone(),
+                            movie_title: watch_list_entry.movie_title.clone(),
+                            user: watch_list_entry.user.clone(),
+                            watched_or_removed_timestamp: Some(datetime),
+                            ..*watch_list_entry
+                        };
+
+                        let _ = bot_data.bot.send_embed(
+                            message.channel_id,
+                            "",
+                            |embed| embed.title(format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", id, updated_entry.movie_title, updated_entry.user).as_str())
+                            .description(
+                                format!("
+                                **von** {} ({}) **zu** {} ({})", 
+                                    original_movie_status.get_emoji(), 
+                                    original_movie_status, 
+                                    updated_entry.status.get_emoji(), 
+                                    updated_entry.status,
+                                ).as_str()
+                            )
+                            .color(COLOR_SUCCESS)
+                        );
+                        let _ = bot_data.watch_list.insert(id, updated_entry);
+                    // If the user is not an admin and did not add the movie himself he is not permitted to change it
+                    } else {
+                        let _ = bot_data.bot.send_embed(
+                            message.channel_id,
+                            "",
+                            |embed| embed.description(
+                                format!("Du hat nicht genügend Rechte um den Status des Films zu ändern. Klagen bitte an das Verfassungsgericht.
+                                `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
+                                    id, 
+                                    watch_list_entry.status.get_emoji(), 
+                                    watch_list_entry.movie_title,
+                                    timestamp_to_string(&watch_list_entry.added_timestamp),
+                                    watch_list_entry.user_id
+                                ).as_str(),
+                            )
+                            .color(COLOR_WARNING)
+                        );
+                    }
+                },
+                None => {
+                    let _ = bot_data.bot.send_embed(
+                        message.channel_id,
+                        "",
+                        |embed| embed.description(
+                            format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
+                        )
+                        .color(COLOR_ERROR)
+                    );
+                }
+            }
+        } else {
+            let _ = bot_data.bot.send_embed(
+                message.channel_id,
+                "",
+                |embed| embed.description(
+                    format!("Das Datum '{}' hatte leider das falsche Format. Bitte stelle sicher, dass das Datum im Format TT.MM.JJJJ vorliegt.", date).as_str(),
+                )
+                .color(COLOR_ERROR)
+            );
+        }
+
+    }
+}
+
 /**
  * Checks all roles of the user for admin permissions and returns true if the user has at least one
  * role with those permissions
  */
-fn is_user_administrator(bot_data: &crate::BotData, user_id: Model::UserId) -> bool {
+pub fn is_user_administrator(bot_data: &crate::BotData, user_id: Model::UserId) -> bool {
     let author_role_ids = bot_data.bot.get_member(bot_data.server_id, user_id).expect("Retrieval of author user failed.").roles;
 
     for role in &bot_data.server_roles {

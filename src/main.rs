@@ -85,7 +85,7 @@ fn main() {
                 // Handle all other messages that start with the prefix
                 else if message.content.starts_with(bot_data.custom_prefix) {
                     bot_data.message = Some(message.clone());
-                    
+
                     // Indicate that the bot is processing the query
                     let _ = bot_data.bot.broadcast_typing(message.channel_id);
                     call_behaviour(&mut bot_data);
@@ -140,6 +140,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
             SimpleCommand::History => general_behaviour::show_help_history(bot_data),
             SimpleCommand::Status => general_behaviour::show_help_set_status(bot_data),
+            SimpleCommand::Unavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
+            SimpleCommand::Watched => general_behaviour::show_help_set_status_watched(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -158,6 +160,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
         History(order) => movie_behaviour::show_history(bot_data, order),
         SetStatus(id, status) => movie_behaviour::set_status(bot_data, id, status),
+        Unavailable(id) => movie_behaviour::set_status(bot_data, id, "Unavailable".to_string()),
+        Watched(id, date) => movie_behaviour::set_status_watched(bot_data, id, date),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -184,5 +188,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         WrongArgumentForWatchList => general_behaviour::show_help_watchlist(bot_data),
         WrongArgumentForHistory => general_behaviour::show_help_history(bot_data),
         NotEnoughArgumentsForStatus | WrongArgumentsForStatus => general_behaviour::show_help_set_status(bot_data),
+        NoArgumentForUnavailable | WrongArgumentForUnavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
+        NotEnoughArgumentsForWatched | WrongArgumentsForWatched => general_behaviour::show_help_set_status_watched(bot_data),
     }
 }

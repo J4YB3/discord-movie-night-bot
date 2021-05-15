@@ -1,4 +1,5 @@
 use crate::COLOR_INFORMATION;
+use crate::movie_behaviour::is_user_administrator;
 
 /**
  * Takes a timestamp from the chrono package and converts it to german date format,
@@ -41,6 +42,8 @@ pub fn show_help(bot_data: &crate::BotData) {
     `history`
     `remove_movie`
     `set_status`
+    `unavailable`
+    `watched`
     `watch_list`";
 
     let _ = bot_data.bot.send_embed(
@@ -236,7 +239,7 @@ pub fn show_help_prefix(bot_data: &crate::BotData) {
 }
 
 /**
- * Shows help on the prefix command
+ * Shows help on the history command
  */
 pub fn show_help_history(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_history function failed.");
@@ -266,7 +269,7 @@ pub fn show_help_history(bot_data: &crate::BotData) {
 }
 
 /**
- * Shows help on the prefix command
+ * Shows help on the set_status command
  */
 pub fn show_help_set_status(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status function failed.");
@@ -297,22 +300,90 @@ pub fn show_help_set_status(bot_data: &crate::BotData) {
 }
 
 /**
+ * Shows help on the unavailable command
+ */
+pub fn show_help_set_status_unavailable(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status_unavailable function failed.");
+
+    let help_str =
+    "Setzt den Status eines Films mit der ID direkt zu `Unavailable`
+    Der Status `Unavailable` wird bei der Zählung der Filme pro Nutzer ignoriert.
+    
+    **Nutzung**
+    !unavailable <ID>
+    
+    **Beispiel**
+    !unavailable 3
+    !unavailable 0010
+    
+    **Aliase**
+    `unavailable`, `un`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Unavailable - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the watched command
+ */
+pub fn show_help_set_status_watched(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status_unavailable function failed.");
+
+    let help_str =
+    "Setzt den Status eines Films mit der ID direkt zu `Watched`
+    Der Status `Watched` führt dazu, dass der Film im Verlauf angezeigt wird und von der Watch Liste verschwindet.
+    Falls der Film an einem anderen Datum als dem aktuellen geschaut wurde, kann durch den zweiten Parameter ein Datum
+    im Format TT.MM.JJJJ angegeben werden.
+    
+    **Nutzung**
+    !watched <ID> <Optional: Datum (TT.MM.JJJJ)>
+    
+    **Beispiel**
+    !watched 10
+    !watched 0002 15.05.2021
+    
+    **Aliase**
+    `watched`, `wa`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Watched - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
  * Sets a new custom prefix for all commands
  */
 pub fn set_new_prefix(bot_data: &mut crate::BotData, new_prefix: char) {
     let message = bot_data.message.as_ref().expect("Passing message to set_new_prefix function failed.");
 
-    bot_data.custom_prefix = new_prefix;
+    if is_user_administrator(bot_data, message.author.id) {
+        bot_data.custom_prefix = new_prefix;
 
-    let _ = bot_data.bot.send_embed(
-        message.channel_id,
-        "",
-        |embed| embed.title(":information_source: Neuer Präfix").description(
-            format!(
-                "Der Präfix für alle Kommandos wurde zu `{}` geändert.
-                Bitte benutze nur noch diesen Präfix um auf den Bot zuzugreifen. Der zuvor genutzte Präfix ist nun nicht mehr verfügbar.", 
-                new_prefix
-            ).as_str()
-        ).color(COLOR_INFORMATION)
-    );
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed.title(":information_source: Neuer Präfix").description(
+                format!(
+                    "Der Präfix für alle Kommandos wurde zu `{}` geändert.
+                    Bitte benutze nur noch diesen Präfix um auf den Bot zuzugreifen. Der zuvor genutzte Präfix ist nun nicht mehr verfügbar.", 
+                    new_prefix
+                ).as_str()
+            ).color(COLOR_INFORMATION)
+        );
+    } else {
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed.title(":information_source: Rechte nicht ausreichend").description(
+                format!(
+                    "Du benötigst Administrator-Rechte um den Präfix für diesen Bot zu ändern."
+                ).as_str()
+            ).color(COLOR_INFORMATION)
+        );
+    }
 }

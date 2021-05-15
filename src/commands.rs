@@ -12,6 +12,8 @@ pub enum Command {
     Prefix(char),
     History(String),
     SetStatus(u32, String),
+    Unavailable(u32),
+    Watched(u32, String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -28,6 +30,10 @@ pub enum ParseCommandError {
     WrongArgumentForHistory,
     NotEnoughArgumentsForStatus,
     WrongArgumentsForStatus,
+    WrongArgumentForUnavailable,
+    NoArgumentForUnavailable,
+    NotEnoughArgumentsForWatched,
+    WrongArgumentsForWatched,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -42,6 +48,8 @@ pub enum SimpleCommand {
     Prefix,
     History,
     Status,
+    Unavailable,
+    Watched,
     Unknown(String),
 }
 
@@ -58,6 +66,8 @@ impl From<&str> for SimpleCommand {
             PREFIX => Self::Prefix,
             SHOW_HISTORY | SHOW_HISTORY_SHORT => Self::History,
             SET_STATUS | SET_STATUS_SHORT => Self::Status,
+            SET_STATUS_UNAVAILABLE | SET_STATUS_UNAVAILABLE_SHORT => Self::Unavailable,
+            SET_STATUS_WATCHED | SET_STATUS_WATCHED_SHORT => Self::Watched,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -76,6 +86,8 @@ impl fmt::Display for SimpleCommand {
             Self::Prefix => write!(f, "{}", PREFIX),
             Self::History => write!(f, "{}", SHOW_HISTORY),
             Self::Status => write!(f, "{}", SET_STATUS),
+            Self::Unavailable => write!(f, "{}", SET_STATUS_UNAVAILABLE),
+            Self::Watched => write!(f, "{}", SET_STATUS_WATCHED),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -199,6 +211,41 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForStatus);
                 }
+            },
+            SET_STATUS_UNAVAILABLE | SET_STATUS_UNAVAILABLE_SHORT => {
+                let argument = arguments.join(" ");
+                if argument.is_empty() {
+                    return Err(ParseCommandError::NoArgumentForUnavailable);
+                }
+
+                // Try to parse the first argument to u32. If that is not possible assume it's a title instead of an id.
+                if let Ok(n) = argument.parse::<u32>() {
+                    Self::Unavailable(n)
+                } else {
+                    return Err(ParseCommandError::WrongArgumentForUnavailable);
+                }
+            },
+            SET_STATUS_WATCHED | SET_STATUS_WATCHED_SHORT => {
+                // first argument should be u32, second should be the new status
+                if arguments.len() < 1 {
+                    return Err(ParseCommandError::NotEnoughArgumentsForWatched);
+                }
+
+                let (id, arguments) = arguments.split_at(1);
+                // We know arguments has at least 1 element and we split the first off into id.
+                // Thus, id has exactly one element at [0].
+                let id = id[0];
+                
+                let mut date = "";
+                if arguments.len() > 0 {
+                    date = arguments[0].trim();
+                }
+
+                if let Ok(n) = id.parse::<u32>() {
+                    Self::Watched(n, date.to_string())
+                } else {
+                    return Err(ParseCommandError::WrongArgumentsForWatched);
+                }
             }
             _ => return Err(ParseCommandError::UnknownCommand),
         })
@@ -218,6 +265,8 @@ impl Command {
             Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
             Self::History(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_HISTORY, order),
             Self::SetStatus(id, status) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS, id, status),
+            Self::Unavailable(id) => format!("{}{} {}", bot_data.custom_prefix, SET_STATUS_UNAVAILABLE, id),
+            Self::Watched(id, date) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS_WATCHED, id, date),
         }
     }
 }
@@ -236,6 +285,10 @@ pub const HELP: &str = "help"; // !help, !help <command> | Shows a list of avail
 pub const HELP_SHORT: &str = "h"; // !h, !h <command> | Short form for help
 pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
 pub const SHOW_HISTORY: &str = "history"; // !history <optional: order> | Shows a list of all movies that have been watched already or that have the status 'removed'
-pub const SHOW_HISTORY_SHORT: &str = "hs"; // !h <optional: order> | short form for history
+pub const SHOW_HISTORY_SHORT: &str = "hs"; // !h <optional: order> | Short form for history
 pub const SET_STATUS: &str = "set_status"; // !set_status <id> <movie_status> | Sets the status of a movie
-pub const SET_STATUS_SHORT: &str = "st"; // !st <id> <movie_status> | Sets the status of a movie
+pub const SET_STATUS_SHORT: &str = "st"; // !st <id> <movie_status> | Short form for set_status
+pub const SET_STATUS_UNAVAILABLE: &str = "unavailable"; // !unavailable <id> | Sets the given movie with id to the unavailable status
+pub const SET_STATUS_UNAVAILABLE_SHORT: &str = "un"; // !un <id> | Short form for unavailable
+pub const SET_STATUS_WATCHED: &str = "watched"; // !watched <id> <optional: date> | Sets the given movie with id to watched. If date is given the timestamp is set to this date
+pub const SET_STATUS_WATCHED_SHORT: &str = "wa"; // !wa <id> <optional: date> | Short form for watched
