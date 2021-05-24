@@ -1,24 +1,128 @@
 use crate::COLOR_INFORMATION;
 use crate::movie_behaviour::is_user_administrator;
+use regex::Regex;
 
 /**
  * Takes a timestamp from the chrono package and converts it to german date format,
  * translating the english weekday to german in the process.
  */
-pub fn timestamp_to_string(timestamp: &chrono::DateTime<chrono::FixedOffset>) -> String {
+pub fn timestamp_to_string(timestamp: &chrono::DateTime<chrono::FixedOffset>, include_weekday: bool) -> String {
     let date_format = timestamp.format("%d.%m.%Y");
-    let day = match format!("{}", timestamp.format("%A")).as_str() {
-        "Monday" => "Montag",
-        "Tuesday" => "Dienstag",
-        "Wednesday" => "Mittwoch",
-        "Thursday" => "Donnerstag",
-        "Friday" => "Freitag",
-        "Saturday" => "Samstag",
-        "Sunday" => "Sonntag",
-        _ => "",
-    };
+    
+    if include_weekday {
+        let day = match format!("{}", timestamp.format("%A")).as_str() {
+            "Monday" => "Montag",
+            "Tuesday" => "Dienstag",
+            "Wednesday" => "Mittwoch",
+            "Thursday" => "Donnerstag",
+            "Friday" => "Freitag",
+            "Saturday" => "Samstag",
+            "Sunday" => "Sonntag",
+            _ => "",
+        };
 
-    format!("{}, {}", day, date_format).to_string()
+        format!("{}, {}", day, date_format).to_string()
+    } else {
+        format!("{}", date_format).to_string()
+    }
+}
+
+/**
+ * Takes a movie release date in the format yyyy-mm-dd and parses it to the chrono datetime format
+ */
+pub fn parse_tmdb_release_date(tmdb_date: String) -> Result<chrono::DateTime<chrono::FixedOffset>, String> {
+    let date_with_utc = tmdb_date.clone() + " 12:00:00.000 +0000";
+    if let Ok(datetime) = chrono::DateTime::parse_from_str(date_with_utc.as_str(), "%Y-%m-%d %H:%M:%S%.3f %z") {
+        Ok(datetime)
+    } else {
+        Err("Parsing of movie release date failed".to_string())
+    }
+}
+
+/**
+ * Takes an IMDb link and extracts the IMDb ID
+ */
+pub fn parse_imdb_link_id(hyperlink: String) -> Option<String> {
+    // Example link: https://www.imdb.com/title/tt0816692/?ref_=fn_al_tt_2
+    if let Some(regex_match) = Regex::new(r"[a-z][a-z][0-9]+").unwrap().find(hyperlink.as_str()) {
+        Some(regex_match.as_str().to_string())
+    } else {
+        None
+    }
+}
+
+/**
+ * Takes the budget of a movie and formats it to easy read format (169 mio.)
+ */
+pub fn format_budget(budget: u64) -> String {
+    let budget_string = format!("{}", budget).to_string();
+    // 169000000 = 169 mio = 169.000.000
+
+    if budget == 0 {
+        return String::from("Unbekannt");
+    } else if budget_string.len() <= 3 {
+        return budget_string.clone();
+    } else {
+        let (first, _) = budget_string.split_at(3);
+        return match budget_string.len() {
+            4..=6 => String::from(format!("{} k", first).as_str()),
+            7..=9 => String::from(format!("{} mio.", first).as_str()),
+            10..=12 => String::from(format!("{} mrd.", first).as_str()),
+            _ => budget_string.clone()
+        };
+    }
+}
+
+/**
+ * Returns true if the given ReactionEmoji enum equals the unicode emoji
+ */
+pub fn reaction_emoji_equals(reaction_emoji: discord::model::ReactionEmoji, unicode: String) -> bool {
+    reaction_emojis_equal(reaction_emoji, discord::model::ReactionEmoji::Unicode(unicode))
+}
+
+/**
+ * Returns true if two ReactionEmoji enum values are equal
+ */
+pub fn reaction_emojis_equal(first: discord::model::ReactionEmoji, second: discord::model::ReactionEmoji) -> bool {
+    if let discord::model::ReactionEmoji::Unicode(first_string) = first {
+        if let discord::model::ReactionEmoji::Unicode(second_string) = second {
+            first_string == second_string
+        } else {
+            false
+        }
+    } else {
+        if let discord::model::ReactionEmoji::Unicode(_) = second {
+            false
+        } else {
+            if let discord::model::ReactionEmoji::Custom{name: _, id: first_id} = first {
+                if let discord::model::ReactionEmoji::Custom{name: _, id: second_id} = second {
+                    first_id == second_id
+                } 
+                // If the second emoji is none of its two enum options return false
+                else {
+                    false
+                }
+            } 
+            // If the first emoji is none of its two enum options return false
+            else {
+                false
+            }
+        }
+    }
+}
+
+/**
+ * Returns the link for the no-image-available image
+ */
+pub fn get_no_image_available_url() -> &'static str {
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/No-Image-Placeholder.svg/330px-No-Image-Placeholder.svg.png"
+}
+
+/**
+ * Returns the link to the TMDb logo for attribution
+ */
+pub fn get_tmdb_attribution_icon_url() -> &'static str {
+    "https://www.themoviedb.org/assets/2/v4/logos/312x276-primary-green-74212f6247252a023be0f02a5a45794925c3689117da9d20ffe47742a665c518.png"
 }
 
 /**
@@ -38,7 +142,6 @@ pub fn show_help(bot_data: &crate::BotData) {
     
     **Filme**
     `add_movie`
-    `edit_movie`
     `history`
     `remove_movie`
     `set_status`
@@ -127,32 +230,6 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Add movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
-    );
-}
-
-/**
- * Shows help on the edit_movie (em) command
- */
-pub fn show_help_edit_movie(bot_data: &crate::BotData) {
-    let message = bot_data.message.as_ref().expect("Passing message to show_help_help function failed.");
-
-    let help_str =
-    "Lässt dich den Titel eines zuvor hinzugefügten Films ändern. Um die ID eines Films herauszufinden, benutze das Kommando !watch_list.
-    
-    **Nutzung**
-    !edit_movie <ID> <Neuer Titel>
-    
-    **Beispiel**
-    !edit_movie 3 Star Wars: Episode IV - A New Hope
-    !edit_movie 0003 Interstellar
-    
-    **Aliase**
-    `edit_movie`, `em`";
-
-    let _ = bot_data.bot.send_embed(
-        message.channel_id,
-        "",
-        |embed| embed.title(":information_source: Edit movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 

@@ -2,6 +2,7 @@ extern crate external_data;
 use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
 use std::{collections::HashMap, str::FromStr};
 use commands::{Command, ParseCommandError, SimpleCommand};
+use tmdb::{themoviedb::*};
 
 mod commands;
 mod movie_behaviour;
@@ -15,6 +16,8 @@ pub struct BotData {
     server_id: Model::ServerId,
     server_roles: Vec<Model::Role>,
     custom_prefix: char,
+    tmdb: TMDb,
+    wait_for_reaction: Option<movie_behaviour::WaitingForReaction>,
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -34,6 +37,11 @@ fn main() {
 
     let mut state = State::new(ready_event);
 
+    let tmdb = TMDb {
+        api_key: external_data::TMDB_API_KEY,
+        language: "de",
+    };
+
     let mut bot_data = BotData {
         bot: bot,
         message: None,
@@ -42,6 +50,8 @@ fn main() {
         server_id: ServerId(0),
         server_roles: vec![],
         custom_prefix: '!',
+        tmdb: tmdb,
+        wait_for_reaction: None,
     };
 
     loop {
@@ -65,14 +75,22 @@ fn main() {
 
         state.update(&event);
 
-        if bot_data.server_id == ServerId(0) {
-            bot_data.server_id = state.servers()[0].id;
+        if state.servers().len() > 0 {
+            // Roles could change while the bot is running
+            bot_data.server_roles = state.servers()[0].roles.clone();
+
+            if bot_data.server_id == ServerId(0) {
+                bot_data.server_id = state.servers()[0].id;
+            }
         }
-        // Roles could change while the bot is running
-        bot_data.server_roles = state.servers()[0].roles.clone();
 
         match event {
             Model::Event::MessageCreate(message) => {
+                // If the message is from the bot itself skip this event
+                if message.author.id == state.user().id {
+                    continue;
+                }
+
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == Command::Quit.to_string(&bot_data) {
                     let _ = bot_data.bot.send_embed(
@@ -89,6 +107,26 @@ fn main() {
                     // Indicate that the bot is processing the query
                     let _ = bot_data.bot.broadcast_typing(message.channel_id);
                     call_behaviour(&mut bot_data);
+                }
+            },
+            Model::Event::ReactionAdd(reaction) => {
+                use movie_behaviour::WaitingForReaction;
+                // If the reaction is from the bot itself skip this event
+                if reaction.user_id == state.user().id {
+                    continue;
+                }
+
+                // Determine if a command is waiting for a reaction
+                if let Some(wait_for_reaction_enum) = bot_data.wait_for_reaction.as_ref() {
+                    match wait_for_reaction_enum {
+                        WaitingForReaction::AddMovie(message_id, _) => {
+                            // If the reaction happened to the correct message
+                            if reaction.message_id == *message_id {
+                                movie_behaviour::add_movie_by_reaction(&mut bot_data, reaction);
+                            }
+                        },
+                        WaitingForReaction::NoWait => continue
+                    }
                 }
             },
             _ => {},
@@ -120,21 +158,17 @@ fn call_behaviour(bot_data: &mut BotData) {
 fn handle_command(bot_data: &mut BotData, command: Command) {
     use Command::*;
     match command {
-        AddMovie(title) => movie_behaviour::add_movie(bot_data, title.as_str()),
+        AddMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), true),
         RemoveMovieById(id) => movie_behaviour::remove_movie_by_id(bot_data, id),
         RemoveMovieByTitle(title) => {
             movie_behaviour::remove_movie_by_title(bot_data, title.as_str())
-        }
-        EditMovie(id, new_title) => {
-            movie_behaviour::edit_movie_by_id(bot_data, id, new_title.as_str())
-        }
+        },
         ShowWatchlist(order) => movie_behaviour::show_watch_list(bot_data, order),
         Help(simple_command) => match simple_command {
             SimpleCommand::General => general_behaviour::show_help(bot_data),
             SimpleCommand::Help => general_behaviour::show_help_help(bot_data),
             SimpleCommand::Quit => general_behaviour::show_help_quit(bot_data),
             SimpleCommand::Add => general_behaviour::show_help_add_movie(bot_data),
-            SimpleCommand::Edit => general_behaviour::show_help_edit_movie(bot_data),
             SimpleCommand::Remove => general_behaviour::show_help_remove_movie(bot_data),
             SimpleCommand::Show => general_behaviour::show_help_watchlist(bot_data),
             SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
@@ -180,9 +214,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         }
         NoArgumentsForAdd => general_behaviour::show_help_add_movie(bot_data),
         NoArgumentsForRemove => general_behaviour::show_help_remove_movie(bot_data),
-        NotEnoughArgumentsForEdit | WrongArgumentsForEdit => {
-            general_behaviour::show_help_edit_movie(bot_data)
-        },
         NoArgumentsForPrefix => general_behaviour::show_help_prefix(bot_data),
         PrefixIsNotAChar => general_behaviour::show_help_prefix(bot_data),
         WrongArgumentForWatchList => general_behaviour::show_help_watchlist(bot_data),
