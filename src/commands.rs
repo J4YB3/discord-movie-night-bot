@@ -6,7 +6,6 @@ pub enum Command {
     AddMovie(String),
     RemoveMovieByTitle(String),
     RemoveMovieById(u32),
-    EditMovie(u32, String),
     ShowWatchlist(String),
     Help(SimpleCommand),
     Prefix(char),
@@ -22,8 +21,6 @@ pub enum ParseCommandError {
     UnknownCommand,
     NoArgumentsForAdd,
     NoArgumentsForRemove,
-    NotEnoughArgumentsForEdit,
-    WrongArgumentsForEdit,
     NoArgumentsForPrefix,
     PrefixIsNotAChar,
     WrongArgumentForWatchList,
@@ -42,7 +39,6 @@ pub enum SimpleCommand {
     Quit,
     Add,
     Remove,
-    Edit,
     Show,
     Help,
     Prefix,
@@ -60,7 +56,6 @@ impl From<&str> for SimpleCommand {
             QUIT => Self::Quit,
             ADD_MOVIE | ADD_MOVIE_SHORT => Self::Add,
             REMOVE_MOVIE | REMOVE_MOVIE_SHORT => Self::Remove,
-            EDIT_MOVIE | EDIT_MOVIE_SHORT => Self::Edit,
             SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::Show,
             HELP | HELP_SHORT => Self::Help,
             PREFIX => Self::Prefix,
@@ -80,7 +75,6 @@ impl fmt::Display for SimpleCommand {
             Self::Quit => write!(f, "{}", QUIT),
             Self::Add => write!(f, "{}", ADD_MOVIE),
             Self::Remove => write!(f, "{}", REMOVE_MOVIE),
-            Self::Edit => write!(f, "{}", EDIT_MOVIE),
             Self::Show => write!(f, "{}", SHOW_WATCH_LIST),
             Self::Help => write!(f, "{}", HELP),
             Self::Prefix => write!(f, "{}", PREFIX),
@@ -144,25 +138,6 @@ impl FromStr for Command {
                     Self::RemoveMovieById(n)
                 } else {
                     Self::RemoveMovieByTitle(argument)
-                }
-            },
-            EDIT_MOVIE | EDIT_MOVIE_SHORT => {
-                // first argument should be u32, second should be the new title
-                if arguments.len() < 2 {
-                    return Err(ParseCommandError::NotEnoughArgumentsForEdit);
-                }
-
-                let (id, title) = arguments.split_at(1);
-                // We know arguments has at least 2 elements and we split the first off into id.
-                // Thus, id has exactly one element at [0].
-                let id = id[0];
-                // And title has at least one element.
-                let title = title.join(" ");
-
-                if let Ok(n) = id.parse::<u32>() {
-                    Self::EditMovie(n, title)
-                } else {
-                    return Err(ParseCommandError::WrongArgumentsForEdit);
                 }
             },
             PREFIX => {
@@ -259,7 +234,6 @@ impl Command {
             Self::Quit => format!("{}{}", bot_data.custom_prefix, QUIT),
             Self::RemoveMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, title),
             Self::RemoveMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, id),
-            Self::EditMovie(id, title) => format!("{}{} {} {}", bot_data.custom_prefix, EDIT_MOVIE, id, title),
             Self::ShowWatchlist(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_WATCH_LIST, order),
             Self::Help(sc) => format!("{}{} {}", bot_data.custom_prefix, HELP, sc),
             Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
