@@ -88,7 +88,7 @@ pub struct WatchListEntry {
     overview: String,
     poster_path: Option<String>,
     release_date: DateTime<chrono::FixedOffset>,
-    adult: bool,
+    genres: String,
     runtime: u32,
     budget: String,
     user: String,
@@ -150,44 +150,101 @@ fn get_movie_link(tmdb_id: u64, watch_link: bool) -> String {
 }
 
 /**
- * Shortens the overview of a movie to 300 characters
+ * Shortens the overview of a movie to around 300 characters
  */
 fn shorten_movie_description(overview: String) -> String {
-    if overview.len() > 300 {
-        let (relevant, _) = overview.split_at(300);
-        return format!("{}...", relevant).to_string();
-    } else {
-        overview
+    let mut i = 0;
+    let mut short_overview = String::from("");
+    for character in overview.chars() {
+        i += 1;
+        if i >= 300 && character.is_whitespace() {
+            short_overview.push_str("...");
+            return short_overview;
+        }
+        short_overview.push(character);
     }
+
+    short_overview
 }
 
 /**
- * Searches a movie on TMDb and displays its information
+ * Receives the genres of a movie as vector and provides a string with the first 3 (or less) genres
+ * as a comma separated String
  */
-pub fn search_movie(bot_data: &mut crate::BotData, title: &str, add_movie: bool) {
+fn get_genres_formatted(genres: &Vec<tmdb::model::Genre>) -> String {
+    return match genres.len() {
+        0 => format!("Keine Genres vorhanden"),
+        1 => format!("{}", genres[0].name),
+        2 => format!("{}, {}", genres[0].name, genres[1].name),
+        _ => {
+            if genres.len() >= 3 {
+                format!("{}, {}, {}", genres[0].name, genres[1].name, genres[2].name)
+            } else {
+                String::from("Fehler")
+            }
+        }
+    };
+}
+
+/**
+ * Searches a movie on TMDb and displays its information. 
+ */
+pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movie: bool) {
     let message = bot_data.message.as_ref().expect("Passing message to search_movie function failed");
 
-    // Initiate the search
-    let movies = bot_data.tmdb
-        .search()
-        .title(title)
-        .execute()
-        .unwrap();
-    
-    if movies.total_results <= 0 {
-        let _ = bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .description(
-                format!("Leider konnten absolut keine Filme mit diesem Titel gefunden werden :cry:")
-                .as_str()
-            )
-            .color(COLOR_ERROR)
-        );
-    } else {
-        let first_movie = &movies.results[0].fetch(&bot_data.tmdb).expect("Fetching of movie from TMDb failed in add_movie");
+    enum SearchResult {
+        Movie(tmdb::model::Movie),
+        TryIMDBLink,
+        Error
+    }
 
+    // Initiate the search
+    let movie = if title_or_link.contains("imdb.com/") {
+        if let Some(imdb_id) = parse_imdb_link_id(title_or_link.to_string()) {
+            let result = bot_data.tmdb
+            .find()
+            .imdb_id(imdb_id.as_str())
+            .execute()
+            .unwrap();
+
+            if result.movie_results.len() <= 0 {
+                SearchResult::Error
+            } else {
+                SearchResult::Movie(
+                    bot_data.tmdb
+                    .fetch()
+                    .id(result.movie_results[0].id)
+                    .execute()
+                    .unwrap()
+                )
+            }
+        } else {
+            SearchResult::Error
+        }
+    } else {
+        let result = bot_data.tmdb
+        .search()
+        .title(title_or_link)
+        .execute();
+        
+        if let Ok(result) = result {
+            if result.total_results <= 0 {
+                SearchResult::Error
+            } else {
+                let fetch_result = result.results[0].fetch(&bot_data.tmdb);
+
+                if let Ok(result) = fetch_result {
+                    SearchResult::Movie(result)
+                } else {
+                    SearchResult::TryIMDBLink
+                }
+            }
+        } else {
+            SearchResult::TryIMDBLink
+        }
+    };
+    
+    if let SearchResult::Movie(first_movie) = movie {
         // If the user wants to add this movie, check if it is already in the watch list
         if add_movie {
             if let Some(id) = find_id_by_tmdb_id(first_movie.id, &bot_data.watch_list) {
@@ -204,7 +261,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title: &str, add_movie: bool)
             overview: shorten_movie_description(first_movie.overview.clone().unwrap_or("Keine Beschreibung verfügbar.".to_string())),
             poster_path: first_movie.poster_path.clone(),
             tmdb_id: first_movie.id,
-            adult: first_movie.adult,
+            genres: get_genres_formatted(&first_movie.genres),
             runtime: first_movie.runtime,
             budget: format_budget(first_movie.budget),
             release_date: parse_tmdb_release_date(first_movie.release_date.clone()).unwrap_or(message.timestamp),
@@ -215,7 +272,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title: &str, add_movie: bool)
             user_id: message.author.id,
         };
 
-        let bot_response = send_movie_information_message(bot_data, &new_entry, true);
+        let bot_response = send_movie_information_message(bot_data, &new_entry, true, add_movie);
 
         if add_movie {
             if let Ok(res_message) = bot_response {
@@ -228,6 +285,30 @@ pub fn search_movie(bot_data: &mut crate::BotData, title: &str, add_movie: bool)
                 let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("❎".to_string()));
             }
         }
+    } else if let SearchResult::TryIMDBLink = movie {
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed
+            .title("Fehler bei der TMDb Suche")
+            .description(
+                format!("Leider ist bei der TMDb Suche ein Fehler aufgetreten. Bitte versuche es erneut mit einem IMDb Link :kissing_heart:")
+                .as_str()
+            )
+            .color(COLOR_ERROR)
+        );
+    } else {
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed
+            .title("Keine Filme gefunden")
+            .description(
+                format!("Leider konnten keine Filme mit diesem Titel gefunden werden, oder der angegebene Link war fehlerhaft :cry:")
+                .as_str()
+            )
+            .color(COLOR_ERROR)
+        );
     }
 }
 
@@ -245,6 +326,7 @@ pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: discord::m
                     overview: new_entry.overview.clone(),
                     poster_path: new_entry.poster_path.clone(),
                     budget: new_entry.budget.clone(),
+                    genres: new_entry.genres.clone(),
                     user: new_entry.user.clone(),
                     status: new_entry.status.clone(),
                     ..*new_entry
@@ -311,10 +393,10 @@ fn send_movie_already_exists_message(bot_data: &crate::BotData, id: u32, tmdb_id
 /**
  * Takes a movie entry and sends an embedded message with all information of the movie
  */
-fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &WatchListEntry, ask_confirmation: bool) -> Result<Model::Message, discord::Error> {
+fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &WatchListEntry, new_movie: bool, ask_confirmation: bool) -> Result<Model::Message, discord::Error> {
     let message = bot_data.message.as_ref().expect("Passing message to send_movie_information_message function failed.");
 
-    if ask_confirmation {
+    if new_movie {
         bot_data.bot.send_embed(
             message.channel_id,
             "",
@@ -332,7 +414,7 @@ fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &Watch
                 .field("Originaltitel", movie_entry.original_title.as_str(), true)
                 .field("Originalsprache", movie_entry.original_language.as_str(), true)
                 .field("Erschienen", timestamp_to_string(&movie_entry.release_date, false).as_str(), true)
-                .field("Ab 18", format!("{}", if movie_entry.adult {"Ja"} else {"Nein"}).as_str(), true)
+                .field("Genres", movie_entry.genres.as_str(), true)
                 .field("Dauer", format!("{} min", movie_entry.runtime).as_str(), true)
                 .field("Budget", movie_entry.budget.as_str(), true)
             )
@@ -359,7 +441,7 @@ fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &Watch
                 .field("Originaltitel", movie_entry.original_title.as_str(), true)
                 .field("Originalsprache", movie_entry.original_language.as_str(), true)
                 .field("Erschienen", timestamp_to_string(&movie_entry.release_date, false).as_str(), true)
-                .field("Ab 18", format!("{}", if movie_entry.adult {"Ja"} else {"Nein"}).as_str(), true)
+                .field("Genres", movie_entry.genres.as_str(), true)
                 .field("Dauer", format!("{} min", movie_entry.runtime).as_str(), true)
                 .field("Budget", movie_entry.budget.as_str(), true)
                 .field("Hinzugefügt von", format!("<@{}>", movie_entry.user_id).as_str(), true)
@@ -735,6 +817,7 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                         overview: watch_list_entry.overview.clone(),
                         poster_path: watch_list_entry.poster_path.clone(),
                         budget: watch_list_entry.budget.clone(),
+                        genres: watch_list_entry.genres.clone(),
                         ..*watch_list_entry
                     };
 
@@ -833,6 +916,7 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
                             overview: watch_list_entry.overview.clone(),
                             poster_path: watch_list_entry.poster_path.clone(),
                             budget: watch_list_entry.budget.clone(),
+                            genres: watch_list_entry.genres.clone(),
                             ..*watch_list_entry
                         };
 
@@ -897,6 +981,42 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
 }
 
 /**
+ * Shows the movie information to the movie id or an error message if the id does not exist
+ */
+pub fn show_movie_by_id(bot_data: &crate::BotData, id: u32) {
+    if let Some(entry) = bot_data.watch_list.get(&id) {
+        let _ = send_movie_information_message(bot_data, entry, false, false);
+    } else {
+        let _ = bot_data.bot.send_embed(
+            bot_data.message.as_ref().expect("Passing of message to show_movie_by_id function failed.").channel_id,
+            "",
+            |embed| embed
+            .title("Film existiert nicht")
+            .description("Ein Film mit dieser ID existiert weder in der Watch list noch in der History.")
+            .color(COLOR_ERROR)
+        );
+    }
+}
+
+/**
+ * Shows the movie information to the movie title or an error message if th etitle does not exist
+ */
+pub fn show_movie_by_title(bot_data: &crate::BotData, title: String) {
+    if let Some(id) = get_movie_id_in_watch_list(title.as_str(), &bot_data.watch_list) {
+        return show_movie_by_id(bot_data, id);
+    } else {
+        let _ = bot_data.bot.send_embed(
+            bot_data.message.as_ref().expect("Passing of message to show_movie_by_title function failed.").channel_id,
+            "",
+            |embed| embed
+            .title("Film existiert nicht")
+            .description("Ein Film mit diesem Namen existiert weder in der Watch list noch in der History.")
+            .color(COLOR_ERROR)
+        );
+    }
+}
+
+/**
  * Checks all roles of the user for admin permissions and returns true if the user has at least one
  * role with those permissions
  */
@@ -927,7 +1047,7 @@ fn is_role_administrator(role: &Model::Role) -> bool {
  */
 fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
     for (id, entry) in watch_list {
-        if entry.movie_title == title || entry.original_title == title {
+        if entry.movie_title.to_lowercase() == title.to_lowercase() || entry.original_title.to_lowercase() == title.to_lowercase() {
             return Some(*id);
         }
     }

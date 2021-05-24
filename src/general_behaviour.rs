@@ -144,7 +144,9 @@ pub fn show_help(bot_data: &crate::BotData) {
     `add_movie`
     `history`
     `remove_movie`
+    `search_movie`
     `set_status`
+    `show_movie`
     `unavailable`
     `watched`
     `watch_list`";
@@ -215,13 +217,14 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_add_movie function failed.");
 
     let help_str = 
-    "Fügt einen Film zur Filmliste hinzu.
+    "Sucht nach einem Film auf TMDb und fügt ihn zur Liste hinzu, wenn dieser vom Nutzer bestätigt wird.
     
     **Nutzung**
-    !add_movie <Filmtitel>
+    !add_movie <Filmtitel | IMDb Link>
     
     **Beispiel**
     !add_movie Forrest Gump
+    !add_movie https://www.imdb.com/title/tt9760504/?ref_=fn_al_tt_1
     
     **Aliase**
     `add_movie`, `am`";
@@ -407,7 +410,7 @@ pub fn show_help_set_status_unavailable(bot_data: &crate::BotData) {
  * Shows help on the watched command
  */
 pub fn show_help_set_status_watched(bot_data: &crate::BotData) {
-    let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status_unavailable function failed.");
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status_watched function failed.");
 
     let help_str =
     "Setzt den Status eines Films mit der ID direkt zu `Watched`
@@ -429,6 +432,59 @@ pub fn show_help_set_status_watched(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Watched - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the show_movie command
+ */
+pub fn show_help_show_movie(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_show_movie function failed.");
+
+    let help_str =
+    "Zeigt Informationen zu einem Film von der Watch List oder der History an.
+    
+    **Nutzung**
+    !show_movie <ID>
+    !show_movie <Titel>
+    
+    **Beispiel**
+    !show_movie 10
+    !show_movie Ni no Kuni
+    
+    **Aliase**
+    `show_movie`, `sm`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Show Movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Show an embedded message containing information for the search_movie (search) command
+ */
+pub fn show_help_search_movie(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_search_movie function failed.");
+
+    let help_str = 
+    "Sucht nach einem Film auf TMDb und zeigt seine Informationen an, ohne den Film zur Liste hinzuzufügen.
+    
+    **Nutzung**
+    !search_movie <Filmtitel | IMDb Link>
+    
+    **Beispiel**
+    !search_movie Forrest Gump
+    !search_movie https://www.imdb.com/title/tt9760504/?ref_=fn_al_tt_1
+    
+    **Aliase**
+    `search_movie`, `search`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Search movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 

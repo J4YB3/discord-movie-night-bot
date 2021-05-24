@@ -170,12 +170,14 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Quit => general_behaviour::show_help_quit(bot_data),
             SimpleCommand::Add => general_behaviour::show_help_add_movie(bot_data),
             SimpleCommand::Remove => general_behaviour::show_help_remove_movie(bot_data),
-            SimpleCommand::Show => general_behaviour::show_help_watchlist(bot_data),
+            SimpleCommand::ShowWatchlist => general_behaviour::show_help_watchlist(bot_data),
             SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
             SimpleCommand::History => general_behaviour::show_help_history(bot_data),
             SimpleCommand::Status => general_behaviour::show_help_set_status(bot_data),
             SimpleCommand::Unavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
             SimpleCommand::Watched => general_behaviour::show_help_set_status_watched(bot_data),
+            SimpleCommand::ShowMovie => general_behaviour::show_help_show_movie(bot_data),
+            SimpleCommand::Search => general_behaviour::show_help_search_movie(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -196,6 +198,9 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         SetStatus(id, status) => movie_behaviour::set_status(bot_data, id, status),
         Unavailable(id) => movie_behaviour::set_status(bot_data, id, "Unavailable".to_string()),
         Watched(id, date) => movie_behaviour::set_status_watched(bot_data, id, date),
+        ShowMovieById(id) => movie_behaviour::show_movie_by_id(bot_data, id),
+        ShowMovieByTitle(title) => movie_behaviour::show_movie_by_title(bot_data, title),
+        SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -221,5 +226,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NotEnoughArgumentsForStatus | WrongArgumentsForStatus => general_behaviour::show_help_set_status(bot_data),
         NoArgumentForUnavailable | WrongArgumentForUnavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
         NotEnoughArgumentsForWatched | WrongArgumentsForWatched => general_behaviour::show_help_set_status_watched(bot_data),
+        NoArgumentsForShowMovie => general_behaviour::show_help_show_movie(bot_data),
+        NoArgumentsForSearchMovie => general_behaviour::show_help_search_movie(bot_data),
     }
 }

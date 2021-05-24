@@ -13,6 +13,9 @@ pub enum Command {
     SetStatus(u32, String),
     Unavailable(u32),
     Watched(u32, String),
+    ShowMovieByTitle(String),
+    ShowMovieById(u32),
+    SearchMovie(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,6 +34,8 @@ pub enum ParseCommandError {
     NoArgumentForUnavailable,
     NotEnoughArgumentsForWatched,
     WrongArgumentsForWatched,
+    NoArgumentsForShowMovie,
+    NoArgumentsForSearchMovie,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,13 +44,15 @@ pub enum SimpleCommand {
     Quit,
     Add,
     Remove,
-    Show,
+    ShowWatchlist,
     Help,
     Prefix,
     History,
     Status,
     Unavailable,
     Watched,
+    ShowMovie,
+    Search,
     Unknown(String),
 }
 
@@ -56,13 +63,15 @@ impl From<&str> for SimpleCommand {
             QUIT => Self::Quit,
             ADD_MOVIE | ADD_MOVIE_SHORT => Self::Add,
             REMOVE_MOVIE | REMOVE_MOVIE_SHORT => Self::Remove,
-            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::Show,
+            SHOW_WATCH_LIST | SHOW_WATCH_LIST_SHORT => Self::ShowWatchlist,
             HELP | HELP_SHORT => Self::Help,
             PREFIX => Self::Prefix,
             SHOW_HISTORY | SHOW_HISTORY_SHORT => Self::History,
             SET_STATUS | SET_STATUS_SHORT => Self::Status,
             SET_STATUS_UNAVAILABLE | SET_STATUS_UNAVAILABLE_SHORT => Self::Unavailable,
             SET_STATUS_WATCHED | SET_STATUS_WATCHED_SHORT => Self::Watched,
+            SHOW_MOVIE | SHOW_MOVIE_SHORT => Self::ShowMovie,
+            SEARCH_MOVIE | SEARCH_MOVIE_SHORT => Self::Search,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -75,13 +84,15 @@ impl fmt::Display for SimpleCommand {
             Self::Quit => write!(f, "{}", QUIT),
             Self::Add => write!(f, "{}", ADD_MOVIE),
             Self::Remove => write!(f, "{}", REMOVE_MOVIE),
-            Self::Show => write!(f, "{}", SHOW_WATCH_LIST),
+            Self::ShowWatchlist => write!(f, "{}", SHOW_WATCH_LIST),
             Self::Help => write!(f, "{}", HELP),
             Self::Prefix => write!(f, "{}", PREFIX),
             Self::History => write!(f, "{}", SHOW_HISTORY),
             Self::Status => write!(f, "{}", SET_STATUS),
             Self::Unavailable => write!(f, "{}", SET_STATUS_UNAVAILABLE),
             Self::Watched => write!(f, "{}", SET_STATUS_WATCHED),
+            Self::ShowMovie => write!(f, "{}", SHOW_MOVIE),
+            Self::Search => write!(f, "{}", SEARCH_MOVIE),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -221,7 +232,30 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForWatched);
                 }
-            }
+            },
+            SHOW_MOVIE | SHOW_MOVIE_SHORT => {
+                // First argument should be a title consisting of multiple words, therefore join them with spaces
+                // In case it is an ID nothing will happen
+                let argument = arguments.join(" ");
+                if argument.is_empty() {
+                    return Err(ParseCommandError::NoArgumentsForShowMovie);
+                }
+
+                // Try to parse the first argument to u32. If that is not possible assume it's a title instead of an id.
+                if let Ok(n) = argument.parse::<u32>() {
+                    Self::ShowMovieById(n)
+                } else {
+                    Self::ShowMovieByTitle(argument)
+                }
+            },
+            SEARCH_MOVIE | SEARCH_MOVIE_SHORT => {
+                let title = arguments.join(" ");
+                if title.is_empty() {
+                    return Err(ParseCommandError::NoArgumentsForSearchMovie); // Returning bypasses Ok-wrapping.
+                }
+
+                Self::SearchMovie(title)
+            },
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -241,18 +275,19 @@ impl Command {
             Self::SetStatus(id, status) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS, id, status),
             Self::Unavailable(id) => format!("{}{} {}", bot_data.custom_prefix, SET_STATUS_UNAVAILABLE, id),
             Self::Watched(id, date) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS_WATCHED, id, date),
+            Self::ShowMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, id),
+            Self::ShowMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, title),
+            Self::SearchMovie(title) => format!("{}{} {}", bot_data.custom_prefix, SEARCH_MOVIE, title),
         }
     }
 }
 
 // Command, Usage | Description
 pub const QUIT: &str = "quit"; // !quit | Quits the bot and saves all changes
-pub const ADD_MOVIE: &str = "add_movie"; // !add_movie <title> | Adds a movie to the watch list
-pub const ADD_MOVIE_SHORT: &str = "am"; // !am <title> | Short form for add_movie
+pub const ADD_MOVIE: &str = "add_movie"; // !add_movie <title|imdb_link> | Adds a movie to the watch list
+pub const ADD_MOVIE_SHORT: &str = "am"; // !am <title|imdb_link> | Short form for add_movie
 pub const REMOVE_MOVIE: &str = "remove_movie"; // !remove_movie <title|id> | Removes a movie by id or by title from the watch list
 pub const REMOVE_MOVIE_SHORT: &str = "rm"; // !rm <title|id> | Short form for remove_movie
-pub const EDIT_MOVIE: &str = "edit_movie"; // !edit_movie <id> <new_title> | Changes the movie specified by its id to a new title
-pub const EDIT_MOVIE_SHORT: &str = "em"; // !em <id> <new_title> | Short form for edit_movie
 pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list <optional: order> | Shows the full watch list
 pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl <optional: order> | Short form for watch_list
 pub const HELP: &str = "help"; // !help, !help <command> | Shows a list of available commands or help to one specific command
@@ -266,3 +301,7 @@ pub const SET_STATUS_UNAVAILABLE: &str = "unavailable"; // !unavailable <id> | S
 pub const SET_STATUS_UNAVAILABLE_SHORT: &str = "un"; // !un <id> | Short form for unavailable
 pub const SET_STATUS_WATCHED: &str = "watched"; // !watched <id> <optional: date> | Sets the given movie with id to watched. If date is given the timestamp is set to this date
 pub const SET_STATUS_WATCHED_SHORT: &str = "wa"; // !wa <id> <optional: date> | Short form for watched
+pub const SHOW_MOVIE: &str = "show_movie"; // !show_movie <title|id> | Shows information about a movie in the watch list or the history
+pub const SHOW_MOVIE_SHORT: &str = "sm"; // !sm <title|id> | Short form for show_movie
+pub const SEARCH_MOVIE: &str = "search_movie"; // !search_movie <title|imdb_link> | Searches TMDb for the given movie and displays its information
+pub const SEARCH_MOVIE_SHORT: &str = "search"; // !search <title|imdb_link> | Short form for search_movie
