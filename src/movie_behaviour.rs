@@ -81,16 +81,7 @@ pub enum MovieStatusErr {
 
 #[derive(Eq, Clone, Debug)]
 pub struct WatchListEntry {
-    movie_title: String,
-    original_title: String,
-    original_language: String,
-    tmdb_id: u64,
-    overview: String,
-    poster_path: Option<String>,
-    release_date: DateTime<chrono::FixedOffset>,
-    genres: String,
-    runtime: u32,
-    budget: String,
+    movie: Movie,
     user: String,
     user_id: Model::UserId,
     status: MovieStatus,
@@ -100,7 +91,7 @@ pub struct WatchListEntry {
 
 impl Ord for WatchListEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.movie_title.cmp(&other.movie_title)
+        self.movie.cmp(&other.movie)
     }
 }
 
@@ -112,13 +103,40 @@ impl PartialOrd for WatchListEntry {
 
 impl PartialEq for WatchListEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.movie_title == other.movie_title
+        self.movie == other.movie
     }
 }
 
-pub enum WaitingForReaction {
-    AddMovie(Model::MessageId, WatchListEntry),
-    NoWait
+#[derive(Eq, Clone, Debug)]
+pub struct Movie {
+    movie_title: String,
+    original_title: String,
+    original_language: String,
+    tmdb_id: u64,
+    overview: String,
+    poster_path: Option<String>,
+    release_date: DateTime<chrono::FixedOffset>,
+    genres: String,
+    runtime: u32,
+    budget: String,
+}
+
+impl Ord for Movie {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.movie_title.cmp(&other.movie_title)
+    }
+}
+
+impl PartialOrd for Movie {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Movie {
+    fn eq(&self, other: &Self) -> bool {
+        self.movie_title == other.movie_title
+    }
 }
 
 /**
@@ -254,7 +272,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             }
         }
 
-        let new_entry = WatchListEntry {
+        let new_movie = Movie {
             movie_title: first_movie.title.clone(),
             original_title: first_movie.original_title.clone(),
             original_language: first_movie.original_language.clone().to_uppercase(),
@@ -265,6 +283,10 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             runtime: first_movie.runtime,
             budget: format_budget(first_movie.budget),
             release_date: parse_tmdb_release_date(first_movie.release_date.clone()).unwrap_or(message.timestamp),
+        };
+
+        let new_entry = WatchListEntry {
+            movie: new_movie,
             user: message.author.name.clone(),
             added_timestamp: message.timestamp,
             watched_or_removed_timestamp: None,
@@ -277,7 +299,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
         if add_movie {
             if let Ok(res_message) = bot_response {
                 // Add the waiting for reaction enum entry to bot_data
-                bot_data.wait_for_reaction = Some(WaitingForReaction::AddMovie(res_message.id, new_entry));
+                bot_data.wait_for_reaction.push(WaitingForReaction::AddMovie(res_message.id, new_entry));
 
                 // Add ✅ as reaction
                 let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("✅".to_string()));
@@ -315,53 +337,40 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
 /**
  * Analyses the reaction to the search result of the add_movie command and adds or discards the movie
  */
-pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: discord::model::Reaction) {
-    if let Some(waiting_for_reaction_enum) = bot_data.wait_for_reaction.as_ref() {
-        if let WaitingForReaction::AddMovie(_, new_entry) = waiting_for_reaction_enum {
-            if reaction_emoji_equals(reaction.emoji, "✅".to_string()) {
-                let copied_entry = WatchListEntry {
-                    movie_title: new_entry.movie_title.clone(),
-                    original_title: new_entry.original_title.clone(),
-                    original_language: new_entry.original_language.clone(),
-                    overview: new_entry.overview.clone(),
-                    poster_path: new_entry.poster_path.clone(),
-                    budget: new_entry.budget.clone(),
-                    genres: new_entry.genres.clone(),
-                    user: new_entry.user.clone(),
-                    status: new_entry.status.clone(),
-                    ..*new_entry
-                };
-                bot_data.watch_list.insert(bot_data.next_movie_id, copied_entry);
-    
-                bot_data.next_movie_id += 1;
+pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: &discord::model::Reaction, new_entry: &WatchListEntry) {
+    if reaction_emoji_equals(&reaction.emoji, "✅".to_string()) {
+        let copied_entry = WatchListEntry {
+            user: new_entry.user.clone(),
+            status: new_entry.status.clone(),
+            ..*new_entry
+        };
+        bot_data.watch_list.insert(bot_data.next_movie_id, copied_entry);
 
-                let _ = bot_data.bot.send_embed(
-                    reaction.channel_id,
-                    "",
-                    |embed| embed
-                    .title(format!("{} wurde erfolgreich hinzugefügt", new_entry.movie_title).as_str())
-                    .thumbnail(generate_poster_link(&new_entry.poster_path).as_str())
-                    .fields(|fields| fields
-                        .field("ID", format!("`{:0>4}`", bot_data.next_movie_id - 1).as_str(), true)
-                        .field("Status", new_entry.status.get_emoji(), true)
-                        .field("Hinzugefügt am", timestamp_to_string(&new_entry.added_timestamp, true).as_str(), true)
-                        .field("Hinzugefügt von", format!("<@{}>", new_entry.user_id).as_str(), true)
-                    )
-                    .color(COLOR_SUCCESS)
-                );
-            } else {
-                let _ = bot_data.bot.send_embed(
-                    reaction.channel_id,
-                    "",
-                    |embed| embed
-                    .title("Hinzufügen abgebrochen.")
-                    .description("Nicht der richtige Film? Versuche das Hinzufügen mit einem IMDb Link.")
-                    .color(COLOR_INFORMATION)
-                );
-            }
-            
-            bot_data.wait_for_reaction = None;
-        }
+        bot_data.next_movie_id += 1;
+
+        let _ = bot_data.bot.send_embed(
+            reaction.channel_id,
+            "",
+            |embed| embed
+            .title(format!("{} wurde erfolgreich hinzugefügt", new_entry.movie.movie_title).as_str())
+            .thumbnail(generate_poster_link(&new_entry.movie.poster_path).as_str())
+            .fields(|fields| fields
+                .field("ID", format!("`{:0>4}`", bot_data.next_movie_id - 1).as_str(), true)
+                .field("Status", new_entry.status.get_emoji(), true)
+                .field("Hinzugefügt am", timestamp_to_string(&new_entry.added_timestamp, true).as_str(), true)
+                .field("Hinzugefügt von", format!("<@{}>", new_entry.user_id).as_str(), true)
+            )
+            .color(COLOR_SUCCESS)
+        );
+    } else {
+        let _ = bot_data.bot.send_embed(
+            reaction.channel_id,
+            "",
+            |embed| embed
+            .title("Hinzufügen abgebrochen.")
+            .description("Nicht der richtige Film? Versuche das Hinzufügen mit einem IMDb Link.")
+            .color(COLOR_INFORMATION)
+        );
     }
 }
 
@@ -376,9 +385,9 @@ fn send_movie_already_exists_message(bot_data: &crate::BotData, id: u32, tmdb_id
         message.channel_id,
         "",
         |embed| embed
-        .title(format!("{}", previous_entry.movie_title).as_str())
+        .title(format!("{}", previous_entry.movie.movie_title).as_str())
         .url(get_movie_link(tmdb_id, false).as_str())
-        .thumbnail(generate_poster_link(&previous_entry.poster_path).as_str())
+        .thumbnail(generate_poster_link(&previous_entry.movie.poster_path).as_str())
         .description(
             format!("**{}** hat diesen Film bereits am *{}* hinzugefügt.\nFalls du einen anderen Film meinst versuche das Hinzufügen durch einen IMDb Link.", 
                 previous_entry.user,
@@ -401,22 +410,22 @@ fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &Watch
             message.channel_id,
             "",
             |embed| embed
-            .title(format!("{}", movie_entry.movie_title).as_str())
+            .title(format!("{}", movie_entry.movie.movie_title).as_str())
             .url(
-                get_movie_link(movie_entry.tmdb_id, false).as_str()
+                get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
             )
             .description(
-                movie_entry.overview.clone().as_str()
+                movie_entry.movie.overview.clone().as_str()
             )
-            .image(generate_poster_link(&movie_entry.poster_path).as_str())
+            .image(generate_poster_link(&movie_entry.movie.poster_path).as_str())
             .color(COLOR_SUCCESS)
             .fields(|fields| fields
-                .field("Originaltitel", movie_entry.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.original_language.as_str(), true)
-                .field("Erschienen", timestamp_to_string(&movie_entry.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.runtime).as_str(), true)
-                .field("Budget", movie_entry.budget.as_str(), true)
+                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
+                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
+                .field("Erschienen", timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
+                .field("Genres", movie_entry.movie.genres.as_str(), true)
+                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
+                .field("Budget", movie_entry.movie.budget.as_str(), true)
             )
             .footer(|footer| footer
                 .text(format!("{}", if ask_confirmation {"Meintest du diesen Film?"} else {""}).as_str())
@@ -428,22 +437,22 @@ fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &Watch
             message.channel_id,
             "",
             |embed| embed
-            .title(format!("{}", movie_entry.movie_title).as_str())
+            .title(format!("{}", movie_entry.movie.movie_title).as_str())
             .url(
-                get_movie_link(movie_entry.tmdb_id, false).as_str()
+                get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
             )
             .description(
-                movie_entry.overview.clone().as_str()
+                movie_entry.movie.overview.clone().as_str()
             )
-            .image(generate_poster_link(&movie_entry.poster_path).as_str())
+            .image(generate_poster_link(&movie_entry.movie.poster_path).as_str())
             .color(COLOR_SUCCESS)
             .fields(|fields| fields
-                .field("Originaltitel", movie_entry.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.original_language.as_str(), true)
-                .field("Erschienen", timestamp_to_string(&movie_entry.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.runtime).as_str(), true)
-                .field("Budget", movie_entry.budget.as_str(), true)
+                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
+                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
+                .field("Erschienen", timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
+                .field("Genres", movie_entry.movie.genres.as_str(), true)
+                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
+                .field("Budget", movie_entry.movie.budget.as_str(), true)
                 .field("Hinzugefügt von", format!("<@{}>", movie_entry.user_id).as_str(), true)
                 .field("Hinzugefügt am", timestamp_to_string(&movie_entry.added_timestamp, true).as_str(), true)
                 .field("Status", format!("{}", movie_entry.status.get_emoji()).as_str(), true)
@@ -498,7 +507,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                         `{:0>4}` {} **{}** | hinzugefügt am *{}* von dir selbst", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie_title,
+                            watch_list_entry.movie.movie_title,
                             timestamp_to_string(&watch_list_entry.added_timestamp, true)
                         ).as_str(),
                     )
@@ -513,7 +522,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                         format!("Film entfernt. Bitte beehren Sie uns bald wieder.\n`{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie_title,
+                            watch_list_entry.movie.movie_title,
                             timestamp_to_string(&watch_list_entry.added_timestamp, true),
                             watch_list_entry.user_id
                         ).as_str(),
@@ -530,7 +539,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
                         `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                             id, 
                             watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie_title,
+                            watch_list_entry.movie.movie_title,
                             timestamp_to_string(&watch_list_entry.added_timestamp, true),
                             watch_list_entry.user_id
                         ).as_str(),
@@ -576,12 +585,17 @@ pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
 
             // For every user
             for (user, entry_vector) in user_movies.iter().sorted() {
-                watch_list_string += format!("Filme hinzugefügt von **{}**\n", user).as_str();
+                watch_list_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
                 
                 // For every movie entry
                 for (id, entry) in entry_vector {
-                    watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
-                    watch_list_string += format!(" {} **{}** | hinzugefügt am *{}*\n", entry.status.get_emoji(), entry.movie_title, timestamp_to_string(&entry.added_timestamp, false)).as_str();
+                    watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt am {}\n\n", 
+                        entry.status.get_emoji(), 
+                        entry.movie.movie_title, 
+                        get_movie_link(entry.movie.tmdb_id, false), 
+                        id.to_string(), 
+                        timestamp_to_string(&entry.added_timestamp, false)
+                    ).as_str();
                 }
 
                 watch_list_string += "\n";
@@ -594,8 +608,14 @@ pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
             // For every movie entry
             for (id, entry) in bot_data.watch_list.iter() {
                 if entry.status.is_watch_list_status() {
-                    watch_list_string += format!("`{:0>4}`", id.to_string()).as_str();
-                    watch_list_string += format!(" {} **{}** | hinzugefügt von **{}** am *{}*\n", entry.status.get_emoji(), entry.movie_title, entry.user, timestamp_to_string(&entry.added_timestamp, false)).as_str();
+                    watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
+                        entry.status.get_emoji(), 
+                        entry.movie.movie_title, 
+                        get_movie_link(entry.movie.tmdb_id, false), 
+                        id.to_string(), 
+                        entry.user, 
+                        timestamp_to_string(&entry.added_timestamp, false)
+                    ).as_str();
                 }
             }
         }
@@ -669,7 +689,7 @@ pub fn show_history(bot_data: &crate::BotData, order: String) {
 
             // For every user
             for (user, entry_vector) in user_movies.iter().sorted() {
-                history_string += format!("Filme hinzugefügt von **{}**\n", user).as_str();
+                history_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
                 
                 let mut time_sorted_vector = entry_vector.clone();
                 
@@ -685,11 +705,11 @@ pub fn show_history(bot_data: &crate::BotData, order: String) {
 
                 // For every movie entry
                 for (id, entry) in time_sorted_vector {
-                    history_string += format!("`{:0>4}`", id.to_string()).as_str();
-                    
-                    history_string += format!(" {} **{}** | {} am *{}*\n", 
+                    history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | {} am {}\n\n", 
                         entry.status.get_emoji(), 
-                        entry.movie_title, 
+                        entry.movie.movie_title, 
+                        get_movie_link(entry.movie.tmdb_id, false),
+                        id.to_string(),
                         if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
                         timestamp_to_string(
                             &entry.watched_or_removed_timestamp
@@ -723,10 +743,11 @@ pub fn show_history(bot_data: &crate::BotData, order: String) {
             // For every movie entry
             for (id, entry) in time_sorted_vector {
                 if entry.status.is_history_status() {
-                    history_string += format!("`{:0>4}`", id.to_string()).as_str();
-                    history_string += format!(" {} **{}** | hinzugefügt von **{}**, {} am *{}*\n", 
+                    history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}**, {} am {}\n\n", 
                         entry.status.get_emoji(), 
-                        entry.movie_title, 
+                        entry.movie.movie_title, 
+                        get_movie_link(entry.movie.tmdb_id, false),
+                        id.to_string(),
                         entry.user, 
                         if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
                         timestamp_to_string(
@@ -810,14 +831,7 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                 if user_is_admin {
                     let mut updated_entry = WatchListEntry {
                         status: new_status.clone(),
-                        movie_title: watch_list_entry.movie_title.clone(),
-                        original_title: watch_list_entry.original_title.clone(),
-                        original_language: watch_list_entry.original_language.clone(),
                         user: watch_list_entry.user.clone(),
-                        overview: watch_list_entry.overview.clone(),
-                        poster_path: watch_list_entry.poster_path.clone(),
-                        budget: watch_list_entry.budget.clone(),
-                        genres: watch_list_entry.genres.clone(),
                         ..*watch_list_entry
                     };
 
@@ -828,7 +842,14 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                     let _ = bot_data.bot.send_embed(
                         message.channel_id,
                         "",
-                        |embed| embed.title(format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", id, updated_entry.movie_title, updated_entry.user).as_str())
+                        |embed| embed
+                        .title(
+                            format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", 
+                                id, 
+                                updated_entry.movie.movie_title, 
+                                updated_entry.user
+                            ).as_str()
+                        )
                         .description(
                             format!("
                             **von** {} ({}) **zu** {} ({})", 
@@ -851,7 +872,7 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                             `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                                 id, 
                                 watch_list_entry.status.get_emoji(), 
-                                watch_list_entry.movie_title,
+                                watch_list_entry.movie.movie_title,
                                 timestamp_to_string(&watch_list_entry.added_timestamp, true),
                                 watch_list_entry.user_id
                             ).as_str(),
@@ -908,22 +929,22 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
                     if user_is_admin {
                         let updated_entry = WatchListEntry {
                             status: new_status.clone(),
-                            movie_title: watch_list_entry.movie_title.clone(),
-                            original_title: watch_list_entry.original_title.clone(),
-                            original_language: watch_list_entry.original_language.clone(),
                             user: watch_list_entry.user.clone(),
                             watched_or_removed_timestamp: Some(datetime),
-                            overview: watch_list_entry.overview.clone(),
-                            poster_path: watch_list_entry.poster_path.clone(),
-                            budget: watch_list_entry.budget.clone(),
-                            genres: watch_list_entry.genres.clone(),
                             ..*watch_list_entry
                         };
 
                         let _ = bot_data.bot.send_embed(
                             message.channel_id,
                             "",
-                            |embed| embed.title(format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", id, updated_entry.movie_title, updated_entry.user).as_str())
+                            |embed| embed
+                            .title(
+                                format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", 
+                                    id, 
+                                    updated_entry.movie.movie_title, 
+                                    updated_entry.user
+                                ).as_str()
+                            )
                             .description(
                                 format!("
                                 **von** {} ({}) **zu** {} ({})", 
@@ -946,7 +967,7 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
                                 `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
                                     id, 
                                     watch_list_entry.status.get_emoji(), 
-                                    watch_list_entry.movie_title,
+                                    watch_list_entry.movie.movie_title,
                                     timestamp_to_string(&watch_list_entry.added_timestamp, true),
                                     watch_list_entry.user_id
                                 ).as_str(),
@@ -1047,7 +1068,7 @@ fn is_role_administrator(role: &Model::Role) -> bool {
  */
 fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
     for (id, entry) in watch_list {
-        if entry.movie_title.to_lowercase() == title.to_lowercase() || entry.original_title.to_lowercase() == title.to_lowercase() {
+        if entry.movie.movie_title.to_lowercase() == title.to_lowercase() || entry.movie.original_title.to_lowercase() == title.to_lowercase() {
             return Some(*id);
         }
     }
@@ -1059,7 +1080,7 @@ fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEn
  */
 fn find_id_by_tmdb_id(tmdb_id: u64, watch_list: &HashMap<u32, WatchListEntry>) -> Option<&u32> {
     for (id, entry) in watch_list {
-        if entry.tmdb_id == tmdb_id {
+        if entry.movie.tmdb_id == tmdb_id {
             return Some(id);
         }
     }
