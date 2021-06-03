@@ -81,7 +81,7 @@ pub enum MovieStatusErr {
 
 #[derive(Eq, Clone, Debug)]
 pub struct WatchListEntry {
-    movie: Movie,
+    pub movie: Movie,
     user: String,
     user_id: Model::UserId,
     status: MovieStatus,
@@ -109,10 +109,10 @@ impl PartialEq for WatchListEntry {
 
 #[derive(Eq, Clone, Debug)]
 pub struct Movie {
-    movie_title: String,
+    pub movie_title: String,
     original_title: String,
     original_language: String,
-    tmdb_id: u64,
+    pub tmdb_id: u64,
     overview: String,
     poster_path: Option<String>,
     release_date: DateTime<chrono::FixedOffset>,
@@ -163,7 +163,7 @@ fn generate_poster_link(poster_path_option: &Option<String>) -> String {
 /**
  * Appends the tmdb id to the default tmdb watch overview link
  */
-fn get_movie_link(tmdb_id: u64, watch_link: bool) -> String {
+pub fn get_movie_link(tmdb_id: u64, watch_link: bool) -> String {
     String::from(format!("https://www.themoviedb.org/movie/{}{}", tmdb_id, if watch_link {"/watch"} else {""}))
 }
 
@@ -340,6 +340,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
 pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: &discord::model::Reaction, new_entry: &WatchListEntry) {
     if reaction_emoji_equals(&reaction.emoji, "✅".to_string()) {
         let copied_entry = WatchListEntry {
+            movie: new_entry.movie.clone(),
             user: new_entry.user.clone(),
             status: new_entry.status.clone(),
             ..*new_entry
@@ -830,6 +831,7 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                 // Only allow change of status if the user has the admin role
                 if user_is_admin {
                     let mut updated_entry = WatchListEntry {
+                        movie: watch_list_entry.movie.clone(),
                         status: new_status.clone(),
                         user: watch_list_entry.user.clone(),
                         ..*watch_list_entry
@@ -928,6 +930,7 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
                     // Only allow change of status if the user has the admin role
                     if user_is_admin {
                         let updated_entry = WatchListEntry {
+                            movie: watch_list_entry.movie.clone(),
                             status: new_status.clone(),
                             user: watch_list_entry.user.clone(),
                             watched_or_removed_timestamp: Some(datetime),
@@ -1066,7 +1069,7 @@ fn is_role_administrator(role: &Model::Role) -> bool {
 /**
  * Returns the watch list id of the movie if the movie was found
  */
-fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
+pub fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
     for (id, entry) in watch_list {
         if entry.movie.movie_title.to_lowercase() == title.to_lowercase() || entry.movie.original_title.to_lowercase() == title.to_lowercase() {
             return Some(*id);

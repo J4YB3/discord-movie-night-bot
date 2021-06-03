@@ -2,6 +2,12 @@ use crate::COLOR_INFORMATION;
 use crate::movie_behaviour::is_user_administrator;
 use regex::Regex;
 
+#[derive(Clone)]
+pub enum WaitingForReaction {
+    AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
+    Vote(discord::model::MessageId),
+}
+
 /**
  * Takes a timestamp from the chrono package and converts it to german date format,
  * translating the english weekday to german in the process.
@@ -76,14 +82,14 @@ pub fn format_budget(budget: u64) -> String {
 /**
  * Returns true if the given ReactionEmoji enum equals the unicode emoji
  */
-pub fn reaction_emoji_equals(reaction_emoji: discord::model::ReactionEmoji, unicode: String) -> bool {
-    reaction_emojis_equal(reaction_emoji, discord::model::ReactionEmoji::Unicode(unicode))
+pub fn reaction_emoji_equals(reaction_emoji: &discord::model::ReactionEmoji, unicode: String) -> bool {
+    reaction_emojis_equal(reaction_emoji, &discord::model::ReactionEmoji::Unicode(unicode))
 }
 
 /**
  * Returns true if two ReactionEmoji enum values are equal
  */
-pub fn reaction_emojis_equal(first: discord::model::ReactionEmoji, second: discord::model::ReactionEmoji) -> bool {
+pub fn reaction_emojis_equal(first: &discord::model::ReactionEmoji, second: &discord::model::ReactionEmoji) -> bool {
     if let discord::model::ReactionEmoji::Unicode(first_string) = first {
         if let discord::model::ReactionEmoji::Unicode(second_string) = second {
             first_string == second_string
@@ -138,6 +144,7 @@ pub fn show_help(bot_data: &crate::BotData) {
 
     **Allgemein**
     `help`
+    `prefix`
     `quit`
     
     **Filme**
@@ -149,7 +156,11 @@ pub fn show_help(bot_data: &crate::BotData) {
     `show_movie`
     `unavailable`
     `watched`
-    `watch_list`";
+    `watch_list`
+    
+    **Abstimmungen**
+    `create_vote`
+    `send_vote`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
@@ -485,6 +496,58 @@ pub fn show_help_search_movie(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Search movie - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the help command
+ */
+pub fn show_help_create_vote(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_create_vote function failed.");
+
+    let help_str =
+    "Erstellt eine neue Abstimmung, die sowohl Filme, als auch generelle Optionen enthalten kann. 
+    Leerzeichen am Anfang und Ende der einzelnen Optionen werden ignoriert.
+    
+    **Nutzung**
+    !create_vote <Titel>|<Liste von Optionen getrennt durch '|'>
+    
+    **Beispiel**
+    !create_vote Das hier ist eine Abstimmung|Option 1|Option 2
+    !create_vote Test|Option 1 |  Option 2   | Option 3
+    
+    **Aliase**
+    `create_vote`, `cv`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Create vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the send_vote command
+ */
+pub fn show_help_send_vote(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_send_vote function failed.");
+
+    let help_str =
+    "Sendet deine bestehende Abstimmung erneut, sofern du eine hast.
+    
+    **Nutzung**
+    !send_vote
+    
+    **Beispiel**
+    !send_vote
+    
+    **Aliase**
+    `send_vote`, `sv`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Send vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 

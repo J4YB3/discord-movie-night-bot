@@ -7,6 +7,7 @@ use tmdb::{themoviedb::*};
 mod commands;
 mod movie_behaviour;
 mod general_behaviour;
+mod voting_behaviour;
 
 pub struct BotData {
     bot: Discord,
@@ -17,7 +18,8 @@ pub struct BotData {
     server_roles: Vec<Model::Role>,
     custom_prefix: char,
     tmdb: TMDb,
-    wait_for_reaction: Option<movie_behaviour::WaitingForReaction>,
+    wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
+    votes: HashMap<u64, voting_behaviour::Vote>,
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -28,6 +30,7 @@ const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 fn main() {
     let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
+    let votes: HashMap<u64, voting_behaviour::Vote> = HashMap::new();
 
     let bot = Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed");
 
@@ -51,7 +54,8 @@ fn main() {
         server_roles: vec![],
         custom_prefix: '!',
         tmdb: tmdb,
-        wait_for_reaction: None,
+        wait_for_reaction: vec![],
+        votes: votes,
     };
 
     loop {
@@ -91,6 +95,8 @@ fn main() {
                     continue;
                 }
 
+                println!("Received message: {:#?}", message.content);
+
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == Command::Quit.to_string(&bot_data) {
                     let _ = bot_data.bot.send_embed(
@@ -110,22 +116,41 @@ fn main() {
                 }
             },
             Model::Event::ReactionAdd(reaction) => {
-                use movie_behaviour::WaitingForReaction;
+                use general_behaviour::WaitingForReaction;
                 // If the reaction is from the bot itself skip this event
                 if reaction.user_id == state.user().id {
                     continue;
                 }
 
                 // Determine if a command is waiting for a reaction
-                if let Some(wait_for_reaction_enum) = bot_data.wait_for_reaction.as_ref() {
-                    match wait_for_reaction_enum {
-                        WaitingForReaction::AddMovie(message_id, _) => {
-                            // If the reaction happened to the correct message
-                            if reaction.message_id == *message_id {
-                                movie_behaviour::add_movie_by_reaction(&mut bot_data, reaction);
-                            }
-                        },
-                        WaitingForReaction::NoWait => continue
+                if bot_data.wait_for_reaction.len() > 0 {
+                    for waiting_idx in 0..bot_data.wait_for_reaction.len() {
+                        // Get the current element
+                        let waiting = bot_data.wait_for_reaction[waiting_idx].clone();
+                        match waiting {
+                            WaitingForReaction::AddMovie(message_id, new_entry) => {
+                                // If the reaction happened to the correct message
+                                if reaction.message_id == message_id {
+                                    movie_behaviour::add_movie_by_reaction(&mut bot_data, &reaction, &new_entry);
+
+                                    // The correct message was found and has therefore now been reacted to
+                                    // Remove the wait_for_reaction element from bot_data and break the loop
+                                    bot_data.wait_for_reaction.remove(waiting_idx);
+                                    break;
+                                }
+                            },
+                            WaitingForReaction::Vote(message_id) => {
+                                // If the reaction happened to the correct message
+                                if reaction.message_id == message_id {
+                                    voting_behaviour::update_vote(&mut bot_data, &reaction, &message_id.0);
+
+                                    // Vote does not get removed from the wait_for_reaction vector since
+                                    // this will only happen once the vote gets closed by the user
+                                    // Only break the loop since the correct message was found
+                                    break;
+                                }
+                            },
+                        }
                     }
                 }
             },
@@ -178,6 +203,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Watched => general_behaviour::show_help_set_status_watched(bot_data),
             SimpleCommand::ShowMovie => general_behaviour::show_help_show_movie(bot_data),
             SimpleCommand::Search => general_behaviour::show_help_search_movie(bot_data),
+            SimpleCommand::CreateVote => general_behaviour::show_help_create_vote(bot_data),
+            SimpleCommand::SendVote => general_behaviour::show_help_send_vote(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -201,6 +228,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieById(id) => movie_behaviour::show_movie_by_id(bot_data, id),
         ShowMovieByTitle(title) => movie_behaviour::show_movie_by_title(bot_data, title),
         SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
+        CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options),
+        SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -228,5 +257,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NotEnoughArgumentsForWatched | WrongArgumentsForWatched => general_behaviour::show_help_set_status_watched(bot_data),
         NoArgumentsForShowMovie => general_behaviour::show_help_show_movie(bot_data),
         NoArgumentsForSearchMovie => general_behaviour::show_help_search_movie(bot_data),
+        NoArgumentsForCreateVote => general_behaviour::show_help_create_vote(bot_data),
     }
 }

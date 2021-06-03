@@ -16,6 +16,8 @@ pub enum Command {
     ShowMovieByTitle(String),
     ShowMovieById(u32),
     SearchMovie(String),
+    CreateVote(String, Vec<String>),
+    SendVote,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,6 +38,7 @@ pub enum ParseCommandError {
     WrongArgumentsForWatched,
     NoArgumentsForShowMovie,
     NoArgumentsForSearchMovie,
+    NoArgumentsForCreateVote,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,6 +56,8 @@ pub enum SimpleCommand {
     Watched,
     ShowMovie,
     Search,
+    CreateVote,
+    SendVote,
     Unknown(String),
 }
 
@@ -72,6 +77,8 @@ impl From<&str> for SimpleCommand {
             SET_STATUS_WATCHED | SET_STATUS_WATCHED_SHORT => Self::Watched,
             SHOW_MOVIE | SHOW_MOVIE_SHORT => Self::ShowMovie,
             SEARCH_MOVIE | SEARCH_MOVIE_SHORT => Self::Search,
+            CREATE_VOTE | CREATE_VOTE_SHORT => Self::CreateVote,
+            SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -93,6 +100,8 @@ impl fmt::Display for SimpleCommand {
             Self::Watched => write!(f, "{}", SET_STATUS_WATCHED),
             Self::ShowMovie => write!(f, "{}", SHOW_MOVIE),
             Self::Search => write!(f, "{}", SEARCH_MOVIE),
+            Self::CreateVote => write!(f, "{}", CREATE_VOTE),
+            Self::SendVote => write!(f, "{}", SEND_VOTE),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -256,6 +265,23 @@ impl FromStr for Command {
 
                 Self::SearchMovie(title)
             },
+            CREATE_VOTE | CREATE_VOTE_SHORT => {
+                let mut vote_parameters: Vec<String> 
+                    = arguments
+                        .join(" ") // Joins the (possibly more than one) arguments to conserve spaces
+                        .split("|") // Split the resulting string at the pipes
+                        .map(|x| x.trim().to_string()) // Remove the leading and trailing white spaces of every option
+                        .collect();
+
+                if vote_parameters.len() == 0 {
+                    return Err(ParseCommandError::NoArgumentsForCreateVote);
+                }
+
+                let vote_title = vote_parameters.remove(0);
+
+                Self::CreateVote(vote_title, vote_parameters)
+            },
+            SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -278,6 +304,8 @@ impl Command {
             Self::ShowMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, id),
             Self::ShowMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, title),
             Self::SearchMovie(title) => format!("{}{} {}", bot_data.custom_prefix, SEARCH_MOVIE, title),
+            Self::CreateVote(title, options) => format!("{}{} {}|{}", bot_data.custom_prefix, CREATE_VOTE, title, options.join("|")),
+            Self::SendVote => format!("{}{}", bot_data.custom_prefix, SEND_VOTE),
         }
     }
 }
@@ -305,3 +333,7 @@ pub const SHOW_MOVIE: &str = "show_movie"; // !show_movie <title|id> | Shows inf
 pub const SHOW_MOVIE_SHORT: &str = "sm"; // !sm <title|id> | Short form for show_movie
 pub const SEARCH_MOVIE: &str = "search_movie"; // !search_movie <title|imdb_link> | Searches TMDb for the given movie and displays its information
 pub const SEARCH_MOVIE_SHORT: &str = "search"; // !search <title|imdb_link> | Short form for search_movie
+pub const CREATE_VOTE: &str = "create_vote"; // !create_vote <title>|<option1>|<option2>|... | Creates a new vote and displays its information
+pub const CREATE_VOTE_SHORT: &str = "cv"; // !cv <title>|<option1>|<option2>|... | Short form for create_vote
+pub const SEND_VOTE: &str = "send_vote"; // !send_vote | Sends the current vote message of the user again
+pub const SEND_VOTE_SHORT: &str = "sv"; // !sv | Short form for send_vote
