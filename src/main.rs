@@ -19,7 +19,7 @@ pub struct BotData {
     custom_prefix: char,
     tmdb: TMDb,
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
-    votes: HashMap<u64, voting_behaviour::Vote>,
+    votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -205,6 +205,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Search => general_behaviour::show_help_search_movie(bot_data),
             SimpleCommand::CreateVote => general_behaviour::show_help_create_vote(bot_data),
             SimpleCommand::SendVote => general_behaviour::show_help_send_vote(bot_data),
+            SimpleCommand::CloseVote => general_behaviour::show_help_close_vote(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -230,6 +231,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
         CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options),
         SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data),
+        CloseVote => voting_behaviour::close_vote(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }

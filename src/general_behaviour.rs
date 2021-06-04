@@ -159,6 +159,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     `watch_list`
     
     **Abstimmungen**
+    `close_vote`
     `create_vote`
     `send_vote`";
 
@@ -548,6 +549,31 @@ pub fn show_help_send_vote(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Send vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the close_vote command
+ */
+pub fn show_help_close_vote(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_close_vote function failed.");
+
+    let help_str =
+    "Beendet deine eigene Abstimmung, sofern du eine hast.
+    
+    **Nutzung**
+    !close_vote
+    
+    **Beispiel**
+    !close_vote
+    
+    **Aliase**
+    `close_vote`, `xv`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Close vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 

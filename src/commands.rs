@@ -18,6 +18,7 @@ pub enum Command {
     SearchMovie(String),
     CreateVote(String, Vec<String>),
     SendVote,
+    CloseVote,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -58,6 +59,7 @@ pub enum SimpleCommand {
     Search,
     CreateVote,
     SendVote,
+    CloseVote,
     Unknown(String),
 }
 
@@ -79,6 +81,7 @@ impl From<&str> for SimpleCommand {
             SEARCH_MOVIE | SEARCH_MOVIE_SHORT => Self::Search,
             CREATE_VOTE | CREATE_VOTE_SHORT => Self::CreateVote,
             SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
+            CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -102,6 +105,7 @@ impl fmt::Display for SimpleCommand {
             Self::Search => write!(f, "{}", SEARCH_MOVIE),
             Self::CreateVote => write!(f, "{}", CREATE_VOTE),
             Self::SendVote => write!(f, "{}", SEND_VOTE),
+            Self::CloseVote => write!(f, "{}", CLOSE_VOTE),
             Self::Unknown(s) => write!(f, "{}", s),
         }
     }
@@ -282,6 +286,7 @@ impl FromStr for Command {
                 Self::CreateVote(vote_title, vote_parameters)
             },
             SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
+            CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -306,6 +311,7 @@ impl Command {
             Self::SearchMovie(title) => format!("{}{} {}", bot_data.custom_prefix, SEARCH_MOVIE, title),
             Self::CreateVote(title, options) => format!("{}{} {}|{}", bot_data.custom_prefix, CREATE_VOTE, title, options.join("|")),
             Self::SendVote => format!("{}{}", bot_data.custom_prefix, SEND_VOTE),
+            Self::CloseVote => format!("{}{}", bot_data.custom_prefix, CLOSE_VOTE),
         }
     }
 }
@@ -337,3 +343,5 @@ pub const CREATE_VOTE: &str = "create_vote"; // !create_vote <title>|<option1>|<
 pub const CREATE_VOTE_SHORT: &str = "cv"; // !cv <title>|<option1>|<option2>|... | Short form for create_vote
 pub const SEND_VOTE: &str = "send_vote"; // !send_vote | Sends the current vote message of the user again
 pub const SEND_VOTE_SHORT: &str = "sv"; // !sv | Short form for send_vote
+pub const CLOSE_VOTE: &str = "close_vote"; // !close_vote | Closes the current vote of the user
+pub const CLOSE_VOTE_SHORT: &str = "xv"; // !xv | Short form for close_vote

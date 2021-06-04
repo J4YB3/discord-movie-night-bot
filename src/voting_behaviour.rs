@@ -388,34 +388,14 @@ pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
             let previous_message_id = vote.message_id;
 
             // First remove all reactions on previous vote
-            for option in vote.options.iter() {
-                let emoji_string = match option {
-                    VoteOptionEnum::GeneralVoteOption(general_option) => general_option.emoji.clone(),
-                    VoteOptionEnum::MovieVoteOption(movie_option) => movie_option.emoji.clone(),
-                };
-
-                let _ = bot_data.bot.delete_reaction(
-                    message.channel_id,
-                    previous_message_id,
-                    None,
-                    discord::model::ReactionEmoji::Unicode(emoji_string)
-                );
-            }
+            remove_all_reactions_on_previous_vote(bot_data, vote, (&message.channel_id, &previous_message_id));
 
             // Send the vote details message and assign it to the bot_data
             // If the sending was successful, add the vote to the waiting_for_reaction list
             if let Some(message_id) = send_vote_details_message(bot_data, vote) {
                 bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::Vote(message_id));
                 
-                // Remove previous wait_for_reaction of previous vote
-                for i in 0..bot_data.wait_for_reaction.len() {
-                    if let crate::general_behaviour::WaitingForReaction::Vote(some_message_id) = bot_data.wait_for_reaction[i] {
-                        if previous_message_id == some_message_id {
-                            bot_data.wait_for_reaction.remove(i);
-                            break;
-                        }
-                    }
-                }
+                remove_previous_vote_from_wait_for_reaction(bot_data, &previous_message_id);
             } else {
                 send_vote_message_failed_to_send_error_message(bot_data);
             }
@@ -425,6 +405,41 @@ pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
 
     // If the user has not vote, send a message
     send_user_has_no_vote_error_message(bot_data);
+}
+
+/**
+ * Iterates through all options of the vote and removes all reactions of the previous vote message
+ */
+fn remove_all_reactions_on_previous_vote(bot_data: &mut crate::BotData, vote: &Vote, channel_and_message_id: (&discord::model::ChannelId, &discord::model::MessageId)) {
+    // Iterate through all options of the vote
+    for option in vote.options.iter() {
+        let emoji_string = match option {
+            VoteOptionEnum::GeneralVoteOption(general_option) => general_option.emoji.clone(),
+            VoteOptionEnum::MovieVoteOption(movie_option) => movie_option.emoji.clone(),
+        };
+
+        let _ = bot_data.bot.delete_reaction(
+            *channel_and_message_id.0,
+            *channel_and_message_id.1,
+            None,
+            discord::model::ReactionEmoji::Unicode(emoji_string)
+        );
+    }
+}
+
+/**
+ * Finds the previous vote message in the wait_for_reaction vector of bot_data and removes the entry
+ */
+fn remove_previous_vote_from_wait_for_reaction(bot_data: &mut crate::BotData, previous_message_id: &discord::model::MessageId) {
+    // Remove previous wait_for_reaction of previous vote
+    for i in 0..bot_data.wait_for_reaction.len() {
+        if let crate::general_behaviour::WaitingForReaction::Vote(some_message_id) = bot_data.wait_for_reaction[i] {
+            if *previous_message_id == some_message_id {
+                bot_data.wait_for_reaction.remove(i);
+                break;
+            }
+        }
+    }
 }
 
 /**
@@ -610,4 +625,65 @@ fn send_emoji_not_part_of_vote_info_message(bot_data: &mut crate::BotData) {
         .description("Danke für deine Reaktion auf meine Nachricht, aber ich bin verpflichtet dir mitzuteilen, dass dieses Emoji nicht Teil der Abstimmung ist. Falls du eine Stimme abgeben möchtest reagiere bitte mit einem passenden Emoji.")
         .color(crate::COLOR_INFORMATION)
     );
+}
+
+/**
+ * Removes the vote from the bot_data and manages all other dependencies
+ * Sends a message summarizing the result of the vote
+ */
+pub fn close_vote(bot_data: &mut crate::BotData) {
+    let message = bot_data.message.clone().expect("Passing message to determine_vote_and_send_details_message failed.");
+
+    for (_, vote) in bot_data.votes.clone().iter_mut() {
+        // If a vote was created by the same user, who sent the message, we found the vote
+        if vote.creator.id == message.author.id {
+            let previous_message_id = vote.message_id;
+
+            // First remove all reactions on previous vote
+            remove_all_reactions_on_previous_vote(bot_data, vote, (&message.channel_id, &previous_message_id));
+
+            // Send the vote summary message
+            if let Some(_) = send_vote_summary_message(bot_data, vote) {
+                remove_previous_vote_from_wait_for_reaction(bot_data, &previous_message_id);
+                let _ = bot_data.votes.remove(&previous_message_id.0);
+            } else {
+                send_vote_message_failed_to_send_error_message(bot_data);
+            }
+            return;
+        }
+    }
+
+    // If the user has not vote, send a message
+    send_user_has_no_vote_error_message(bot_data);
+}
+
+/**
+ * Sends the vote summary
+ */
+fn send_vote_summary_message(bot_data: &crate::BotData, vote: &Vote) -> Option<discord::model::MessageId> {
+    let mut embed_description = String::from(format!("**{}**", vote.title));
+    embed_description.push_str(build_vote_embed_description(vote).as_str());
+
+    if let Ok(message) = bot_data.bot.send_embed(
+        bot_data.message.clone().expect("Passing message to send_vote_summary_message failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Abstimmungsergebnisse")
+            .description(embed_description.as_str())
+            .author(|author_builder| 
+                if let Some(avatar_url) = vote.creator.avatar_url() {
+                    author_builder
+                    .name(vote.creator.name.as_str())
+                    .icon_url(avatar_url.as_str())
+                } else {
+                    author_builder
+                    .name(vote.creator.name.as_str())
+                }
+            )
+            .color(crate::COLOR_SUCCESS)
+    ) {
+        Some(message.id)
+    } else {
+        None
+    }
 }
