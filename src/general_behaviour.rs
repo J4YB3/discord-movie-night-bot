@@ -2,7 +2,7 @@ use crate::COLOR_INFORMATION;
 use crate::movie_behaviour::is_user_administrator;
 use regex::Regex;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum WaitingForReaction {
     AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
     Vote(discord::model::MessageId),

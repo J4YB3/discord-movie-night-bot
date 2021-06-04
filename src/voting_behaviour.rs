@@ -375,16 +375,47 @@ fn send_vote_message_failed_to_send_error_message(bot_data: &crate::BotData) {
     );
 }
 
+/**
+ * Searches the vote of a user in the votes vector. If a vote was found sends the vote message again.
+ * If the user has no vote, sends a message.
+ */
 pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
-    let message_author_id = bot_data.message.clone().expect("Passing message to determine_vote_and_send_details_message failed.").author.id;
+    let message = bot_data.message.clone().expect("Passing message to determine_vote_and_send_details_message failed.");
 
     for (_, vote) in bot_data.votes.clone().iter_mut() {
-        if vote.creator.id == message_author_id {
+        // If a vote was created by the same user, who sent the message, we found the vote
+        if vote.creator.id == message.author.id {
+            let previous_message_id = vote.message_id;
+
+            // First remove all reactions on previous vote
+            for option in vote.options.iter() {
+                let emoji_string = match option {
+                    VoteOptionEnum::GeneralVoteOption(general_option) => general_option.emoji.clone(),
+                    VoteOptionEnum::MovieVoteOption(movie_option) => movie_option.emoji.clone(),
+                };
+
+                let _ = bot_data.bot.delete_reaction(
+                    message.channel_id,
+                    previous_message_id,
+                    None,
+                    discord::model::ReactionEmoji::Unicode(emoji_string)
+                );
+            }
+
             // Send the vote details message and assign it to the bot_data
             // If the sending was successful, add the vote to the waiting_for_reaction list
             if let Some(message_id) = send_vote_details_message(bot_data, vote) {
                 bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::Vote(message_id));
-                // TODO: Remove previous wait_for_reaction of previous vote (vote is already known)
+                
+                // Remove previous wait_for_reaction of previous vote
+                for i in 0..bot_data.wait_for_reaction.len() {
+                    if let crate::general_behaviour::WaitingForReaction::Vote(some_message_id) = bot_data.wait_for_reaction[i] {
+                        if previous_message_id == some_message_id {
+                            bot_data.wait_for_reaction.remove(i);
+                            break;
+                        }
+                    }
+                }
             } else {
                 send_vote_message_failed_to_send_error_message(bot_data);
             }
@@ -392,7 +423,22 @@ pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
         }
     }
 
-    // TODO: Send message that there is no vote
+    // If the user has not vote, send a message
+    send_user_has_no_vote_error_message(bot_data);
+}
+
+/**
+ * Sends an error message that the user has no vote yet
+ */
+fn send_user_has_no_vote_error_message(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_user_has_no_vote_error_message failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Keine Abstimmung")
+        .description("Es sieht so aus als ob du aktuell keine Abstimmung besitzt.")
+        .color(crate::COLOR_ERROR)
+    );
 }
 
 /**
@@ -410,7 +456,7 @@ pub fn update_vote(bot_data: &mut crate::BotData, reaction: &discord::model::Rea
             send_emoji_not_part_of_vote_info_message(bot_data);
         }
     } else {
-        send_vote_not_found_error_message(bot_data);
+        send_vote_not_found_error_message(bot_data, &reaction.user_id);
     }
 }
 
@@ -536,15 +582,17 @@ fn update_vote_embed(bot: &discord::Discord, channel_id: &discord::model::Channe
 /**
  * Sends the error message that the vote could not be found in the list of votes
  */
-fn send_vote_not_found_error_message(bot_data: &mut crate::BotData) {
-    let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_vote_not_found_error_message failed.").channel_id, 
-        "",
-        |embed| embed
-        .title("Abstimmung existiert nicht")
-        .description("Vielleicht hast du versucht auf eine alte Abstimmung zu reagieren, oder der Nutzer hat die Abstimmung erneut in den Kanal gesendet?")
-        .color(crate::COLOR_ERROR)
-    );
+fn send_vote_not_found_error_message(bot_data: &mut crate::BotData, user_id: &discord::model::UserId) {
+    if let Ok(private_channel) = bot_data.bot.create_private_channel(*user_id) {
+        let _ = bot_data.bot.send_embed(
+            private_channel.id, 
+            "",
+            |embed| embed
+            .title("Abstimmung existiert nicht")
+            .description("Vielleicht hast du versucht auf eine alte Abstimmung zu reagieren, oder der Nutzer hat die Abstimmung erneut in den Kanal gesendet?")
+            .color(crate::COLOR_ERROR)
+        );
+    }
 }
 
 /**
