@@ -150,6 +150,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     **Filme**
     `add_movie`
     `history`
+    `movie_limit`
     `remove_movie`
     `search_movie`
     `set_status`
@@ -488,7 +489,7 @@ pub fn show_help_search_movie(bot_data: &crate::BotData) {
     
     **Beispiel**
     !search_movie Forrest Gump
-    !search_movie https://www.imdb.com/title/tt9760504/?ref_=fn_al_tt_1
+    !search_movie https://www.imdb.com/title/tt9760504/
     
     **Aliase**
     `search_movie`, `search`";
@@ -574,6 +575,33 @@ pub fn show_help_close_vote(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Close vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the movie_limit command
+ */
+pub fn show_help_movie_limit(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_movie_limit function failed.");
+
+    let help_str =
+    "Zeigt oder setzt die maximale Anzahl der Filme, die jeder Nutzer hinzufügen darf. 
+    Dieses Kommando kann nur von Administratoren genutzt werden.
+    
+    **Nutzung**
+    !movie_limit <Optional: positive ganze Zahl>
+    
+    **Beispiel**
+    !movie_limit
+    !movie_limit 5
+    
+    **Aliase**
+    `movie_limit`, `ml`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Movie limit - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
 

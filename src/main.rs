@@ -20,6 +20,7 @@ pub struct BotData {
     tmdb: TMDb,
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
     votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
+    movie_limit_per_user: u32,
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -56,6 +57,7 @@ fn main() {
         tmdb: tmdb,
         wait_for_reaction: vec![],
         votes: votes,
+        movie_limit_per_user: 10,
     };
 
     loop {
@@ -98,7 +100,7 @@ fn main() {
                 println!("Received message: {:#?}", message.content);
 
                 // Handle the quit command first, since it needs to be within main (because of loop break)
-                if message.content == Command::Quit.to_string(&bot_data) {
+                if message.content == String::from(format!("{}{}", bot_data.custom_prefix, crate::commands::QUIT)) {
                     let _ = bot_data.bot.send_embed(
                         message.channel_id,
                         "",
@@ -206,6 +208,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::CreateVote => general_behaviour::show_help_create_vote(bot_data),
             SimpleCommand::SendVote => general_behaviour::show_help_send_vote(bot_data),
             SimpleCommand::CloseVote => general_behaviour::show_help_close_vote(bot_data),
+            SimpleCommand::MovieLimit => general_behaviour::show_help_movie_limit(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -232,6 +235,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options),
         SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data),
         CloseVote => voting_behaviour::close_vote(bot_data),
+        SetMovieLimit(number) => movie_behaviour::set_movie_limit(bot_data, number),
+        ShowMovieLimit => movie_behaviour::show_movie_limit(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -260,5 +265,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NoArgumentsForShowMovie => general_behaviour::show_help_show_movie(bot_data),
         NoArgumentsForSearchMovie => general_behaviour::show_help_search_movie(bot_data),
         NoArgumentsForCreateVote => general_behaviour::show_help_create_vote(bot_data),
+        WrongArgumentsForMovieLimit => general_behaviour::show_help_movie_limit(bot_data),
     }
 }

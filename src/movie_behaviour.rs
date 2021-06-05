@@ -269,6 +269,12 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                 // The movie that was just found is already in the watch list, so send a message
                 // Also return from the function, because no new movie should be added in that case
                 return send_movie_already_exists_message(bot_data, *id, first_movie.id);
+            } else {
+                // Check if the user has already added up to the maximum limit of movies
+                if user_has_too_many_movies(bot_data, message.author.id) {
+                    // If that is the case, return because the movie should not be added
+                    return send_user_has_too_many_movies_error_message(bot_data);
+                }
             }
         }
 
@@ -332,6 +338,48 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             .color(COLOR_ERROR)
         );
     }
+}
+
+/**
+ * Checks if the user has more than the allowed limit of movies in
+ * the watch list and returns the result as bool
+ */
+fn user_has_too_many_movies(bot_data: &crate::BotData, user_id: discord::model::UserId) -> bool {
+    let mut movie_count = 0;
+
+    // For every entry in the watch list, check if the user_id matches and the movie
+    // counts as watch list movie (not history)
+    for (_, movie_entry) in bot_data.watch_list.iter() {
+        if movie_entry.user_id == user_id && movie_entry.status.is_watch_list_status() {
+            movie_count += 1;
+        }
+    }
+
+    if movie_count >= bot_data.movie_limit_per_user {
+        return true;
+    }
+
+    false
+}
+
+/**
+ * Sends an error message, that the user already has too many movies in the watch list
+ */
+fn send_user_has_too_many_movies_error_message(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.clone().expect("Passing message to send_user_has_too_many_movies_error_message failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Zu viele Filme hinzugefügt")
+            .description(
+                format!("Leider hast du bereits zu viele Filme zur Liste hinzugefügt. 
+                Das aktuelle Limit beträgt `{}` pro Nutzer.", 
+                    bot_data.movie_limit_per_user
+                )
+                .as_str()
+            )
+            .color(crate::COLOR_INFORMATION)
+    );
 }
 
 /**
@@ -1038,6 +1086,57 @@ pub fn show_movie_by_title(bot_data: &crate::BotData, title: String) {
             .color(COLOR_ERROR)
         );
     }
+}
+
+/** 
+ * Updates the movie limit per user and sends an info message
+ */
+pub fn set_movie_limit(bot_data: &mut crate::BotData, new_limit: u32) {
+    let message = bot_data.message.clone().expect("Passing of message to set_movie_limit failed.");
+    
+    if !is_user_administrator(bot_data, message.author.id) {
+        return send_insufficient_permissions_error_message(bot_data);
+    }
+
+    let old_limit = bot_data.movie_limit_per_user;
+    bot_data.movie_limit_per_user = new_limit;
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed
+            .title("Filmlimit aktualisiert")
+            .description(format!("Das Filmlimit wurde von `{}` auf `{}` geändert.", old_limit, new_limit).as_str())
+            .color(crate::COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Sends a message that the user has insufficient permissions
+ */
+fn send_insufficient_permissions_error_message(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.clone().expect("Passing message to send_insufficient_permissions_error_message failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Keine Berechtigung")
+            .description("Leider besitzt du nicht die benötigte Berechtigung für dieses Kommando.")
+            .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sends a message showing the current movie limit
+ */
+pub fn show_movie_limit(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.clone().expect("Passing of message to show_movie_limit function failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Filmlimit")
+            .description(format!("Das aktuelle Filmlimit beträgt `{}` pro Nutzer.", bot_data.movie_limit_per_user).as_str())
+            .color(crate::COLOR_INFORMATION)
+    );
 }
 
 /**
