@@ -238,7 +238,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieByTitle(title) => movie_behaviour::show_movie_by_title(bot_data, title),
         SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
         CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options),
-        SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data),
+        SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data, None),
+        SendVoteWithUserId(user_id) => voting_behaviour::determine_vote_and_send_details_message(bot_data, Some(user_id)),
         CloseVote => voting_behaviour::close_vote(bot_data),
         SetMovieLimit(number) => movie_behaviour::set_movie_limit(bot_data, number),
         ShowMovieLimit => movie_behaviour::show_movie_limit(bot_data),
@@ -274,5 +275,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NoArgumentsForCreateVote => help_behaviour::show_help_create_vote(bot_data),
         WrongArgumentsForMovieLimit => help_behaviour::show_help_movie_limit(bot_data),
         WrongArgumentsForMovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
+        WrongArgumentsForSendVoteWithUserId => help_behaviour::show_help_send_vote(bot_data),
     }
 }

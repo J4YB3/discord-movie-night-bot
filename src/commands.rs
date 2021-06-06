@@ -20,6 +20,7 @@ pub enum Command {
     SearchMovie(String),
     CreateVote(String, Vec<String>),
     SendVote,
+    SendVoteWithUserId(u64),
     CloseVote,
     SetMovieVoteLimit(u32),
     ShowMovieVoteLimit,
@@ -46,6 +47,7 @@ pub enum ParseCommandError {
     NoArgumentsForCreateVote,
     WrongArgumentsForMovieLimit,
     WrongArgumentsForMovieVoteLimit,
+    WrongArgumentsForSendVoteWithUserId,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -271,7 +273,35 @@ impl FromStr for Command {
 
                 Self::CreateVote(vote_title, vote_parameters)
             },
-            SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
+            SEND_VOTE | SEND_VOTE_SHORT => {
+                let argument = arguments.join(" ");
+
+                if argument.is_empty() {
+                    return Ok(Self::SendVote);
+                }
+
+                if argument.contains("!") {
+                    if let Some(remainder) = argument.strip_prefix("<@!") {
+                        if let Some(remainder) = remainder.strip_suffix(">") {
+                            if let Ok(user_id) = remainder.parse::<u64>() {
+                                return Ok(Command::SendVoteWithUserId(user_id));
+                            }
+                        }
+                    }
+
+                    return Err(ParseCommandError::WrongArgumentsForSendVoteWithUserId);
+                } else {
+                    if let Some(remainder) = argument.strip_prefix("<@") {
+                        if let Some(remainder) = remainder.strip_suffix(">") {
+                            if let Ok(user_id) = remainder.parse::<u64>() {
+                                return Ok(Command::SendVoteWithUserId(user_id));
+                            }
+                        }
+                    }
+
+                    return Err(ParseCommandError::WrongArgumentsForSendVoteWithUserId);
+                }
+            },
             CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             MOVIE_LIMIT | MOVIE_LIMIT_SHORT => {
                 let argument = arguments.join(" ");
@@ -333,8 +363,8 @@ pub const SEARCH_MOVIE_SHORT: &str = "search"; // !search <title|imdb_link> | Sh
 // Voting
 pub const CREATE_VOTE: &str = "create_vote"; // !create_vote <title>|<option1>|<option2>|... | Creates a new vote and displays its information
 pub const CREATE_VOTE_SHORT: &str = "cv"; // !cv <title>|<option1>|<option2>|... | Short form for create_vote
-pub const SEND_VOTE: &str = "send_vote"; // !send_vote | Sends the current vote message of the user again
-pub const SEND_VOTE_SHORT: &str = "sv"; // !sv | Short form for send_vote
+pub const SEND_VOTE: &str = "send_vote"; // !send_vote <optional: @OtherUser> | Sends the current vote message of the user again
+pub const SEND_VOTE_SHORT: &str = "sv"; // !sv <optional: @OtherUser> | Short form for send_vote
 pub const CLOSE_VOTE: &str = "close_vote"; // !close_vote | Closes the current vote of the user
 pub const CLOSE_VOTE_SHORT: &str = "xv"; // !xv | Short form for close_vote
 pub const MOVIE_VOTE_LIMIT: &str = "movie_vote_limit"; // !movie_vote_limit <optional: number> | Sets the amount of movies that are selected for a new movie vote

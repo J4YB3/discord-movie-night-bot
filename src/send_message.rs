@@ -272,6 +272,20 @@ pub fn user_has_no_vote_error(bot_data: &crate::BotData) {
 }
 
 /**
+ * Sends an error message that the user has no vote yet
+ */
+pub fn other_user_has_no_vote_error(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::user_has_no_vote_error failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Keine Abstimmung")
+        .description("Es sieht so aus als ob der angegebene Nutzer aktuell keine Abstimmung besitzt.")
+        .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
  * Sends the error message that the vote could not be found in the list of votes
  */
 pub fn vote_not_found_error(bot_data: &mut crate::BotData, user_id: &discord::model::UserId) {

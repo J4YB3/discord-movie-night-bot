@@ -306,12 +306,15 @@ fn build_vote_embed_description(vote: &Vote) -> String {
  * Searches the vote of a user in the votes vector. If a vote was found sends the vote message again.
  * If the user has no vote, sends a message.
  */
-pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
+pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData, other_user_id: Option<u64>) {
     let message = bot_data.message.clone().expect("Passing message to determine_vote_and_send_details_message failed.");
+
+    // If another user id was given to the function, set the comparing_user_id to that one, otherwise set as message.author.id
+    let comparing_user_id = if let Some(user_id) = other_user_id { discord::model::UserId(user_id) } else { message.author.id };
 
     for (_, vote) in bot_data.votes.clone().iter_mut() {
         // If a vote was created by the same user, who sent the message, we found the vote
-        if vote.creator.id == message.author.id {
+        if vote.creator.id == comparing_user_id {
             let previous_message_id = vote.message_id;
 
             // First remove all reactions on previous vote
@@ -331,7 +334,11 @@ pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData) {
     }
 
     // If the user has not vote, send a message
-    send_message::user_has_no_vote_error(bot_data);
+    if other_user_id.is_none() {
+        send_message::user_has_no_vote_error(bot_data);
+    } else {
+        send_message::other_user_has_no_vote_error(bot_data);
+    }
 }
 
 /**

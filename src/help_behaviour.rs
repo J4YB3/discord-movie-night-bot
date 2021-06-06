@@ -405,13 +405,16 @@ pub fn show_help_send_vote(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_send_vote function failed.");
 
     let help_str =
-    "Sendet deine bestehende Abstimmung erneut, sofern du eine hast.
+    "Sendet deine bestehende Abstimmung erneut. Wenn der Parameter leer gelassen wird, wird deine eigene
+    Abstimmung erneut gesendet, sofern du eine besitzt. Wenn du einen Nutzer mit dem @-Zeichen angibst, wird
+    die Abstimmung des angegebenen Users erneut gesendet, sofern dieser eine besitzt.
     
     **Nutzung**
-    !send_vote
+    !send_vote <Optional: @AndererUser>
     
     **Beispiel**
     !send_vote
+    !send_vote @J4YB3
     
     **Aliase**
     `send_vote`, `sv`";
