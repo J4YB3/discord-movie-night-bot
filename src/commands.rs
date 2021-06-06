@@ -21,6 +21,8 @@ pub enum Command {
     CreateVote(String, Vec<String>),
     SendVote,
     CloseVote,
+    SetMovieVoteLimit(u32),
+    ShowMovieVoteLimit,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,6 +45,7 @@ pub enum ParseCommandError {
     NoArgumentsForSearchMovie,
     NoArgumentsForCreateVote,
     WrongArgumentsForMovieLimit,
+    WrongArgumentsForMovieVoteLimit,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -64,6 +67,7 @@ pub enum SimpleCommand {
     CreateVote,
     SendVote,
     CloseVote,
+    MovieVoteLimit,
     Unknown(String),
 }
 
@@ -87,34 +91,11 @@ impl From<&str> for SimpleCommand {
             SEND_VOTE | SEND_VOTE_SHORT => Self::SendVote,
             CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             MOVIE_LIMIT | MOVIE_LIMIT_SHORT => Self::MovieLimit,
+            MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => Self::MovieVoteLimit,
             st => Self::Unknown(String::from(st)),
         }
     }
 }
-
-// impl fmt::Display for SimpleCommand {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::General => write!(f, ""),
-//             Self::Quit => write!(f, "{}", QUIT),
-//             Self::Add => write!(f, "{}", ADD_MOVIE),
-//             Self::Remove => write!(f, "{}", REMOVE_MOVIE),
-//             Self::ShowWatchlist => write!(f, "{}", SHOW_WATCH_LIST),
-//             Self::Help => write!(f, "{}", HELP),
-//             Self::Prefix => write!(f, "{}", PREFIX),
-//             Self::History => write!(f, "{}", SHOW_HISTORY),
-//             Self::Status => write!(f, "{}", SET_STATUS),
-//             Self::Unavailable => write!(f, "{}", SET_STATUS_UNAVAILABLE),
-//             Self::Watched => write!(f, "{}", SET_STATUS_WATCHED),
-//             Self::ShowMovie => write!(f, "{}", SHOW_MOVIE),
-//             Self::Search => write!(f, "{}", SEARCH_MOVIE),
-//             Self::CreateVote => write!(f, "{}", CREATE_VOTE),
-//             Self::SendVote => write!(f, "{}", SEND_VOTE),
-//             Self::CloseVote => write!(f, "{}", CLOSE_VOTE),
-//             Self::Unknown(s) => write!(f, "{}", s),
-//         }
-//     }
-// }
 
 impl FromStr for Command {
     type Err = ParseCommandError;
@@ -305,34 +286,23 @@ impl FromStr for Command {
                     return Err(ParseCommandError::WrongArgumentsForMovieLimit);
                 }
             },
+            MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => {
+                let argument = arguments.join(" ");
+                if argument.is_empty() {
+                    return Ok(Self::ShowMovieVoteLimit);
+                }
+
+                // Try to parse the first argument to u32. If that is not possible assume it's a title instead of an id.
+                if let Ok(n) = argument.parse::<u32>() {
+                    Self::SetMovieVoteLimit(n)
+                } else {
+                    return Err(ParseCommandError::WrongArgumentsForMovieVoteLimit);
+                }
+            },
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
 }
-
-// impl Command {
-//     pub fn to_string(&self, bot_data: &crate::BotData) -> String {
-//         match self {
-//             Self::AddMovie(title) => format!("{}{} {}", bot_data.custom_prefix, ADD_MOVIE, title),
-//             Self::Quit => format!("{}{}", bot_data.custom_prefix, QUIT),
-//             Self::RemoveMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, title),
-//             Self::RemoveMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, REMOVE_MOVIE, id),
-//             Self::ShowWatchlist(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_WATCH_LIST, order),
-//             Self::Help(sc) => format!("{}{} {}", bot_data.custom_prefix, HELP, sc),
-//             Self::Prefix(new_prefix) => format!("{}{} {}", bot_data.custom_prefix, PREFIX, new_prefix),
-//             Self::History(order) => format!("{}{} {}", bot_data.custom_prefix, SHOW_HISTORY, order),
-//             Self::SetStatus(id, status) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS, id, status),
-//             Self::Unavailable(id) => format!("{}{} {}", bot_data.custom_prefix, SET_STATUS_UNAVAILABLE, id),
-//             Self::Watched(id, date) => format!("{}{} {} {}", bot_data.custom_prefix, SET_STATUS_WATCHED, id, date),
-//             Self::ShowMovieById(id) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, id),
-//             Self::ShowMovieByTitle(title) => format!("{}{} {}", bot_data.custom_prefix, SHOW_MOVIE, title),
-//             Self::SearchMovie(title) => format!("{}{} {}", bot_data.custom_prefix, SEARCH_MOVIE, title),
-//             Self::CreateVote(title, options) => format!("{}{} {}|{}", bot_data.custom_prefix, CREATE_VOTE, title, options.join("|")),
-//             Self::SendVote => format!("{}{}", bot_data.custom_prefix, SEND_VOTE),
-//             Self::CloseVote => format!("{}{}", bot_data.custom_prefix, CLOSE_VOTE),
-//         }
-//     }
-// }
 
 // Command, Usage | Description
 pub const QUIT: &str = "quit"; // !quit | Quits the bot and saves all changes
@@ -367,3 +337,5 @@ pub const SEND_VOTE: &str = "send_vote"; // !send_vote | Sends the current vote 
 pub const SEND_VOTE_SHORT: &str = "sv"; // !sv | Short form for send_vote
 pub const CLOSE_VOTE: &str = "close_vote"; // !close_vote | Closes the current vote of the user
 pub const CLOSE_VOTE_SHORT: &str = "xv"; // !xv | Short form for close_vote
+pub const MOVIE_VOTE_LIMIT: &str = "movie_vote_limit"; // !movie_vote_limit <optional: number> | Sets the amount of movies that are selected for a new movie vote
+pub const MOVIE_VOTE_LIMIT_SHORT: &str = "mvl"; // !mvl <optional: number> | Short form for movie_vote_limit
