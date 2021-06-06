@@ -8,6 +8,8 @@ mod commands;
 mod movie_behaviour;
 mod general_behaviour;
 mod voting_behaviour;
+mod send_message;
+mod help_behaviour;
 
 pub struct BotData {
     bot: Discord,
@@ -21,6 +23,7 @@ pub struct BotData {
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
     votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
     movie_limit_per_user: u32,
+    movie_vote_limit: u32,
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -58,6 +61,7 @@ fn main() {
         wait_for_reaction: vec![],
         votes: votes,
         movie_limit_per_user: 10,
+        movie_vote_limit: 2,
     };
 
     loop {
@@ -192,23 +196,24 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         },
         ShowWatchlist(order) => movie_behaviour::show_watch_list(bot_data, order),
         Help(simple_command) => match simple_command {
-            SimpleCommand::General => general_behaviour::show_help(bot_data),
-            SimpleCommand::Help => general_behaviour::show_help_help(bot_data),
-            SimpleCommand::Quit => general_behaviour::show_help_quit(bot_data),
-            SimpleCommand::Add => general_behaviour::show_help_add_movie(bot_data),
-            SimpleCommand::Remove => general_behaviour::show_help_remove_movie(bot_data),
-            SimpleCommand::ShowWatchlist => general_behaviour::show_help_watchlist(bot_data),
-            SimpleCommand::Prefix => general_behaviour::show_help_prefix(bot_data),
-            SimpleCommand::History => general_behaviour::show_help_history(bot_data),
-            SimpleCommand::Status => general_behaviour::show_help_set_status(bot_data),
-            SimpleCommand::Unavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
-            SimpleCommand::Watched => general_behaviour::show_help_set_status_watched(bot_data),
-            SimpleCommand::ShowMovie => general_behaviour::show_help_show_movie(bot_data),
-            SimpleCommand::Search => general_behaviour::show_help_search_movie(bot_data),
-            SimpleCommand::CreateVote => general_behaviour::show_help_create_vote(bot_data),
-            SimpleCommand::SendVote => general_behaviour::show_help_send_vote(bot_data),
-            SimpleCommand::CloseVote => general_behaviour::show_help_close_vote(bot_data),
-            SimpleCommand::MovieLimit => general_behaviour::show_help_movie_limit(bot_data),
+            SimpleCommand::General => help_behaviour::show_help(bot_data),
+            SimpleCommand::Help => help_behaviour::show_help_help(bot_data),
+            SimpleCommand::Quit => help_behaviour::show_help_quit(bot_data),
+            SimpleCommand::Add => help_behaviour::show_help_add_movie(bot_data),
+            SimpleCommand::Remove => help_behaviour::show_help_remove_movie(bot_data),
+            SimpleCommand::ShowWatchlist => help_behaviour::show_help_watchlist(bot_data),
+            SimpleCommand::Prefix => help_behaviour::show_help_prefix(bot_data),
+            SimpleCommand::History => help_behaviour::show_help_history(bot_data),
+            SimpleCommand::Status => help_behaviour::show_help_set_status(bot_data),
+            SimpleCommand::Unavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
+            SimpleCommand::Watched => help_behaviour::show_help_set_status_watched(bot_data),
+            SimpleCommand::ShowMovie => help_behaviour::show_help_show_movie(bot_data),
+            SimpleCommand::Search => help_behaviour::show_help_search_movie(bot_data),
+            SimpleCommand::CreateVote => help_behaviour::show_help_create_vote(bot_data),
+            SimpleCommand::SendVote => help_behaviour::show_help_send_vote(bot_data),
+            SimpleCommand::CloseVote => help_behaviour::show_help_close_vote(bot_data),
+            SimpleCommand::MovieLimit => help_behaviour::show_help_movie_limit(bot_data),
+            SimpleCommand::MovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -237,6 +242,8 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         CloseVote => voting_behaviour::close_vote(bot_data),
         SetMovieLimit(number) => movie_behaviour::set_movie_limit(bot_data, number),
         ShowMovieLimit => movie_behaviour::show_movie_limit(bot_data),
+        SetMovieVoteLimit(number) => voting_behaviour::set_movie_vote_limit(bot_data, number),
+        ShowMovieVoteLimit => voting_behaviour::show_movie_vote_limit(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -253,18 +260,19 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
                     .color(COLOR_ERROR)
             });
         }
-        NoArgumentsForAdd => general_behaviour::show_help_add_movie(bot_data),
-        NoArgumentsForRemove => general_behaviour::show_help_remove_movie(bot_data),
-        NoArgumentsForPrefix => general_behaviour::show_help_prefix(bot_data),
-        PrefixIsNotAChar => general_behaviour::show_help_prefix(bot_data),
-        WrongArgumentForWatchList => general_behaviour::show_help_watchlist(bot_data),
-        WrongArgumentForHistory => general_behaviour::show_help_history(bot_data),
-        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => general_behaviour::show_help_set_status(bot_data),
-        NoArgumentForUnavailable | WrongArgumentForUnavailable => general_behaviour::show_help_set_status_unavailable(bot_data),
-        NotEnoughArgumentsForWatched | WrongArgumentsForWatched => general_behaviour::show_help_set_status_watched(bot_data),
-        NoArgumentsForShowMovie => general_behaviour::show_help_show_movie(bot_data),
-        NoArgumentsForSearchMovie => general_behaviour::show_help_search_movie(bot_data),
-        NoArgumentsForCreateVote => general_behaviour::show_help_create_vote(bot_data),
-        WrongArgumentsForMovieLimit => general_behaviour::show_help_movie_limit(bot_data),
+        NoArgumentsForAdd => help_behaviour::show_help_add_movie(bot_data),
+        NoArgumentsForRemove => help_behaviour::show_help_remove_movie(bot_data),
+        NoArgumentsForPrefix => help_behaviour::show_help_prefix(bot_data),
+        PrefixIsNotAChar => help_behaviour::show_help_prefix(bot_data),
+        WrongArgumentForWatchList => help_behaviour::show_help_watchlist(bot_data),
+        WrongArgumentForHistory => help_behaviour::show_help_history(bot_data),
+        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => help_behaviour::show_help_set_status(bot_data),
+        NoArgumentForUnavailable | WrongArgumentForUnavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
+        NotEnoughArgumentsForWatched | WrongArgumentsForWatched => help_behaviour::show_help_set_status_watched(bot_data),
+        NoArgumentsForShowMovie => help_behaviour::show_help_show_movie(bot_data),
+        NoArgumentsForSearchMovie => help_behaviour::show_help_search_movie(bot_data),
+        NoArgumentsForCreateVote => help_behaviour::show_help_create_vote(bot_data),
+        WrongArgumentsForMovieLimit => help_behaviour::show_help_movie_limit(bot_data),
+        WrongArgumentsForMovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
     }
 }

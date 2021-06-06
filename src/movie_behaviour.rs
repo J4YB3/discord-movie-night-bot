@@ -3,8 +3,9 @@ use chrono::DateTime;
 use std::collections::HashMap;
 use itertools::Itertools;
 use std::{fmt, cmp::Ordering, str::FromStr};
-use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, COLOR_BOT, COLOR_INFORMATION};
+use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_BOT, COLOR_INFORMATION};
 use crate::general_behaviour::*;
+use crate::send_message;
 use tmdb::{themoviedb::*};
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -32,7 +33,7 @@ impl MovieStatus {
     /**
      * Returns the string slice containing the emoji corresponding to this status
      */
-    fn get_emoji(&self) -> &str {
+    pub fn get_emoji(&self) -> &str {
         match self {
             MovieStatus::NotWatched => ":white_large_square:",
             MovieStatus::Watched => ":white_check_mark:",
@@ -82,11 +83,11 @@ pub enum MovieStatusErr {
 #[derive(Eq, Clone, Debug)]
 pub struct WatchListEntry {
     pub movie: Movie,
-    user: String,
-    user_id: Model::UserId,
-    status: MovieStatus,
-    added_timestamp: DateTime<chrono::FixedOffset>,
-    watched_or_removed_timestamp: Option<DateTime<chrono::FixedOffset>>,
+    pub user: String,
+    pub user_id: Model::UserId,
+    pub status: MovieStatus,
+    pub added_timestamp: DateTime<chrono::FixedOffset>,
+    pub watched_or_removed_timestamp: Option<DateTime<chrono::FixedOffset>>,
 }
 
 impl Ord for WatchListEntry {
@@ -110,15 +111,15 @@ impl PartialEq for WatchListEntry {
 #[derive(Eq, Clone, Debug)]
 pub struct Movie {
     pub movie_title: String,
-    original_title: String,
-    original_language: String,
+    pub original_title: String,
+    pub original_language: String,
     pub tmdb_id: u64,
-    overview: String,
-    poster_path: Option<String>,
-    release_date: DateTime<chrono::FixedOffset>,
-    genres: String,
-    runtime: u32,
-    budget: String,
+    pub overview: String,
+    pub poster_path: Option<String>,
+    pub release_date: DateTime<chrono::FixedOffset>,
+    pub genres: String,
+    pub runtime: u32,
+    pub budget: String,
 }
 
 impl Ord for Movie {
@@ -142,7 +143,7 @@ impl PartialEq for Movie {
 /**
  * Appends the poster path returned by tmdb search to the default tmdb poster directory
  */
-fn get_movie_poster_link(poster_path: &str) -> String {
+pub fn get_movie_poster_link(poster_path: &str) -> String {
     String::from(format!("https://www.themoviedb.org/t/p/w220_and_h330_face{}", poster_path))
 }
 
@@ -150,7 +151,7 @@ fn get_movie_poster_link(poster_path: &str) -> String {
  * Generates the poster link with the poster_path_option from the WatchListEntry
  * Automatically replaces the poster path with the no-image-available image if the path is None
  */
-fn generate_poster_link(poster_path_option: &Option<String>) -> String {
+pub fn generate_poster_link(poster_path_option: &Option<String>) -> String {
     get_movie_poster_link(
         poster_path_option
         .as_ref()
@@ -268,12 +269,12 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             if let Some(id) = find_id_by_tmdb_id(first_movie.id, &bot_data.watch_list) {
                 // The movie that was just found is already in the watch list, so send a message
                 // Also return from the function, because no new movie should be added in that case
-                return send_movie_already_exists_message(bot_data, *id, first_movie.id);
+                return send_message::movie_already_exists(bot_data, *id, first_movie.id);
             } else {
                 // Check if the user has already added up to the maximum limit of movies
                 if user_has_too_many_movies(bot_data, message.author.id) {
                     // If that is the case, return because the movie should not be added
-                    return send_user_has_too_many_movies_error_message(bot_data);
+                    return send_message::user_has_too_many_movies_error(bot_data);
                 }
             }
         }
@@ -300,7 +301,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             user_id: message.author.id,
         };
 
-        let bot_response = send_movie_information_message(bot_data, &new_entry, true, add_movie);
+        let bot_response = send_message::movie_information(bot_data, &new_entry, true, add_movie);
 
         if add_movie {
             if let Ok(res_message) = bot_response {
@@ -363,26 +364,6 @@ fn user_has_too_many_movies(bot_data: &crate::BotData, user_id: discord::model::
 }
 
 /**
- * Sends an error message, that the user already has too many movies in the watch list
- */
-fn send_user_has_too_many_movies_error_message(bot_data: &crate::BotData) {
-    let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_user_has_too_many_movies_error_message failed.").channel_id,
-        "",
-        |embed| embed
-            .title("Zu viele Filme hinzugefügt")
-            .description(
-                format!("Leider hast du bereits zu viele Filme zur Liste hinzugefügt. 
-                Das aktuelle Limit beträgt `{}` pro Nutzer.", 
-                    bot_data.movie_limit_per_user
-                )
-                .as_str()
-            )
-            .color(crate::COLOR_INFORMATION)
-    );
-}
-
-/**
  * Analyses the reaction to the search result of the add_movie command and adds or discards the movie
  */
 pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: &discord::model::Reaction, new_entry: &WatchListEntry) {
@@ -424,94 +405,6 @@ pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: &discord::
 }
 
 /**
- * Sends an embedded message that the movie was already added by someone
- */
-fn send_movie_already_exists_message(bot_data: &crate::BotData, id: u32, tmdb_id: u64) {
-    let message = bot_data.message.as_ref().expect("Passing message to send_movie_already_exists_message function failed");
-    let previous_entry = bot_data.watch_list.get(&id).expect("Accessing the watch list has failed inside the send_movie_already_exists_message function.");
-
-    let _ = bot_data.bot.send_embed(
-        message.channel_id,
-        "",
-        |embed| embed
-        .title(format!("{}", previous_entry.movie.movie_title).as_str())
-        .url(get_movie_link(tmdb_id, false).as_str())
-        .thumbnail(generate_poster_link(&previous_entry.movie.poster_path).as_str())
-        .description(
-            format!("**{}** hat diesen Film bereits am *{}* hinzugefügt.\nFalls du einen anderen Film meinst versuche das Hinzufügen durch einen IMDb Link.", 
-                previous_entry.user,
-                timestamp_to_string(&previous_entry.added_timestamp, true),
-            )
-            .as_str()
-        )
-        .color(COLOR_ERROR)
-    );
-}
-
-/**
- * Takes a movie entry and sends an embedded message with all information of the movie
- */
-fn send_movie_information_message(bot_data: &crate::BotData, movie_entry: &WatchListEntry, new_movie: bool, ask_confirmation: bool) -> Result<Model::Message, discord::Error> {
-    let message = bot_data.message.as_ref().expect("Passing message to send_movie_information_message function failed.");
-
-    if new_movie {
-        bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title(format!("{}", movie_entry.movie.movie_title).as_str())
-            .url(
-                get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
-            )
-            .description(
-                movie_entry.movie.overview.clone().as_str()
-            )
-            .image(generate_poster_link(&movie_entry.movie.poster_path).as_str())
-            .color(COLOR_SUCCESS)
-            .fields(|fields| fields
-                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
-                .field("Erschienen", timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.movie.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
-                .field("Budget", movie_entry.movie.budget.as_str(), true)
-            )
-            .footer(|footer| footer
-                .text(format!("{}", if ask_confirmation {"Meintest du diesen Film?"} else {""}).as_str())
-            )
-            .thumbnail(get_tmdb_attribution_icon_url())
-        )
-    } else {
-        bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title(format!("{}", movie_entry.movie.movie_title).as_str())
-            .url(
-                get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
-            )
-            .description(
-                movie_entry.movie.overview.clone().as_str()
-            )
-            .image(generate_poster_link(&movie_entry.movie.poster_path).as_str())
-            .color(COLOR_SUCCESS)
-            .fields(|fields| fields
-                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
-                .field("Erschienen", timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.movie.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
-                .field("Budget", movie_entry.movie.budget.as_str(), true)
-                .field("Hinzugefügt von", format!("<@{}>", movie_entry.user_id).as_str(), true)
-                .field("Hinzugefügt am", timestamp_to_string(&movie_entry.added_timestamp, true).as_str(), true)
-                .field("Status", format!("{}", movie_entry.status.get_emoji()).as_str(), true)
-            )
-            .thumbnail(get_tmdb_attribution_icon_url())
-        )
-    }
-}
-
-/**
  * Removes a movie from the watch list when given a title. Checks if the user has administrator rights.
  * If so he is allowed to remove any movie by any user. Normal users are only allowed to remove their own
  * movies.
@@ -522,15 +415,7 @@ pub fn remove_movie_by_title(bot_data: &mut crate::BotData, title: &str) {
     match possible_id {
         Some(id) => remove_movie_by_id(bot_data, id),
         None => {
-            let message = bot_data.message.as_ref().expect("Passing message to remove_movie_by_title function failed.");
-            let _ = bot_data.bot.send_embed(
-                message.channel_id,
-                "",
-                |embed| embed.description(
-                    format!("Ein Film mit dem Titel **{}** konnte nicht in der Liste gefunden werden.", title).as_str(),
-                )
-                .color(COLOR_ERROR)
-            );
+            send_message::movie_title_not_found_error(bot_data, title.to_string());
         }
     }
 }
@@ -548,65 +433,18 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
     match movie {
         Some(watch_list_entry) => {
             if watch_list_entry.user == message.author.name {
-                let _ = bot_data.bot.send_embed(
-                    message.channel_id,
-                    "",
-                    |embed| embed.description(
-                        format!("Film entfernt. Senk ju for trevelling wis Deutsche Bahn. Ach ne das war falsch :sweat_smile:
-                        `{:0>4}` {} **{}** | hinzugefügt am *{}* von dir selbst", 
-                            id, 
-                            watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie.movie_title,
-                            timestamp_to_string(&watch_list_entry.added_timestamp, true)
-                        ).as_str(),
-                    )
-                    .color(COLOR_WARNING)
-                );
+                send_message::movie_removed_successfully(bot_data);
                 let _ = bot_data.watch_list.remove(&id);
             } else if user_is_admin {
-                let _ = bot_data.bot.send_embed(
-                    message.channel_id,
-                    "",
-                    |embed| embed.description(
-                        format!("Film entfernt. Bitte beehren Sie uns bald wieder.\n`{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
-                            id, 
-                            watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie.movie_title,
-                            timestamp_to_string(&watch_list_entry.added_timestamp, true),
-                            watch_list_entry.user_id
-                        ).as_str(),
-                    )
-                    .color(COLOR_WARNING)
-                );
+                send_message::movie_removed_successfully(bot_data);
                 let _ = bot_data.watch_list.remove(&id);
             } else {
-                let _ = bot_data.bot.send_embed(
-                    message.channel_id,
-                    "",
-                    |embed| embed.description(
-                        format!("Du hat nicht genügend Rechte um den Film zu entfernen. Klagen bitte an das Verfassungsgericht.
-                        `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
-                            id, 
-                            watch_list_entry.status.get_emoji(), 
-                            watch_list_entry.movie.movie_title,
-                            timestamp_to_string(&watch_list_entry.added_timestamp, true),
-                            watch_list_entry.user_id
-                        ).as_str(),
-                    )
-                    .color(COLOR_WARNING)
-                );
+                send_message::insufficient_permissions_error(bot_data);
             }
             
         },
         None => {
-            let _ = bot_data.bot.send_embed(
-                message.channel_id,
-                "",
-                |embed| embed.description(
-                    format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
-                )
-                .color(COLOR_ERROR)
-            );
+            send_message::movie_id_not_found_error(bot_data, &id);
         }
     }
 }
@@ -630,50 +468,20 @@ pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
         if order == "user" {
             watch_list_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
 
-            let user_movies = create_user_sorted_watch_list(bot_data);
-
-            // For every user
-            for (user, entry_vector) in user_movies.iter().sorted() {
-                watch_list_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
-                
-                // For every movie entry
-                for (id, entry) in entry_vector {
-                    watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt am {}\n\n", 
-                        entry.status.get_emoji(), 
-                        entry.movie.movie_title, 
-                        get_movie_link(entry.movie.tmdb_id, false), 
-                        id.to_string(), 
-                        timestamp_to_string(&entry.added_timestamp, false)
-                    ).as_str();
-                }
-
-                watch_list_string += "\n";
-            }
+            watch_list_string += generate_user_sorted_watch_list_description(bot_data).as_str();
         } 
         // If the ordering should be random
         else {
             watch_list_string += format!("Die Filme werden in zufälliger Reihenfolge angezeigt.\n\n").as_str();
 
-            // For every movie entry
-            for (id, entry) in bot_data.watch_list.iter() {
-                if entry.status.is_watch_list_status() {
-                    watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
-                        entry.status.get_emoji(), 
-                        entry.movie.movie_title, 
-                        get_movie_link(entry.movie.tmdb_id, false), 
-                        id.to_string(), 
-                        entry.user, 
-                        timestamp_to_string(&entry.added_timestamp, false)
-                    ).as_str();
-                }
-            }
+            watch_list_string += generate_random_sorted_watch_list_description(bot_data).as_str();
         }
     }
     
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("Watch list").description(watch_list_string.as_str()).color(COLOR_BOT)
+        |embed| embed.title("Filmliste").description(watch_list_string.as_str()).color(COLOR_BOT)
     );
 }
 
@@ -698,6 +506,57 @@ fn create_user_sorted_watch_list(bot_data: &crate::BotData) -> HashMap<&String, 
     }
 
     user_movies
+}
+
+/**
+ * Generates the description text for the watch list sorted by user
+ */
+fn generate_user_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
+    let user_movies = create_user_sorted_watch_list(bot_data);
+    let mut watch_list_string = String::new();
+
+    // For every user
+    for (user, entry_vector) in user_movies.iter().sorted() {
+        watch_list_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
+        
+        // For every movie entry
+        for (id, entry) in entry_vector {
+            watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt am {}\n\n", 
+                entry.status.get_emoji(), 
+                entry.movie.movie_title, 
+                get_movie_link(entry.movie.tmdb_id, false), 
+                id.to_string(), 
+                timestamp_to_string(&entry.added_timestamp, false)
+            ).as_str();
+        }
+
+        watch_list_string += "\n";
+    }
+
+    watch_list_string
+}
+
+/**
+ * Generates the description text for the randomly sorted watch list
+ */
+fn generate_random_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
+    let mut watch_list_string = String::new();
+
+    // For every movie entry
+    for (id, entry) in bot_data.watch_list.iter() {
+        if entry.status.is_watch_list_status() {
+            watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
+                entry.status.get_emoji(), 
+                entry.movie.movie_title, 
+                get_movie_link(entry.movie.tmdb_id, false), 
+                id.to_string(), 
+                entry.user, 
+                timestamp_to_string(&entry.added_timestamp, false)
+            ).as_str();
+        }
+    }
+
+    watch_list_string
 }
 
 /**
@@ -734,87 +593,65 @@ pub fn show_history(bot_data: &crate::BotData, order: String) {
         if order == "user" {
             history_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
 
-            let user_movies = create_user_sorted_history(bot_data);
-
-            // For every user
-            for (user, entry_vector) in user_movies.iter().sorted() {
-                history_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
-                
-                let mut time_sorted_vector = entry_vector.clone();
-                
-                time_sorted_vector.sort_by( 
-                    |a, b| 
-                    a.1.watched_or_removed_timestamp
-                        .expect("Movie did not have a watched_or_removed timestamp in show_history")
-                        .cmp(
-                            &b.1.watched_or_removed_timestamp
-                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                        )
-                    );
-
-                // For every movie entry
-                for (id, entry) in time_sorted_vector {
-                    history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | {} am {}\n\n", 
-                        entry.status.get_emoji(), 
-                        entry.movie.movie_title, 
-                        get_movie_link(entry.movie.tmdb_id, false),
-                        id.to_string(),
-                        if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
-                        timestamp_to_string(
-                            &entry.watched_or_removed_timestamp
-                                .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                            , false)
-                        ).as_str();
-                }
-
-                history_string += "\n";
-            }
+            history_string += generate_user_sorted_history_description(bot_data).as_str();
         } 
         // If the ordering should be by date
         else {
             history_string += format!("Die Filme werden in zeitlicher Reihenfolge angezeigt.\n\n").as_str();
 
-            let mut time_sorted_vector = bot_data.watch_list.clone().into_iter()
-                .filter(|(_id, entry)| entry.status.is_history_status())
-                .map(|(id, entry)| (id, entry))
-                .collect::<Vec<(u32, WatchListEntry)>>();
-
-            time_sorted_vector.sort_by( 
-                |a, b| 
-                a.1.watched_or_removed_timestamp
-                    .expect("Movie did not have a watched_or_removed timestamp in show_history")
-                    .cmp(
-                        &b.1.watched_or_removed_timestamp
-                        .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                    )
-                );
-
-            // For every movie entry
-            for (id, entry) in time_sorted_vector {
-                if entry.status.is_history_status() {
-                    history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}**, {} am {}\n\n", 
-                        entry.status.get_emoji(), 
-                        entry.movie.movie_title, 
-                        get_movie_link(entry.movie.tmdb_id, false),
-                        id.to_string(),
-                        entry.user, 
-                        if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
-                        timestamp_to_string(
-                            &entry.watched_or_removed_timestamp
-                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                            , false
-                        )
-                    ).as_str();
-                }
-            }
+            history_string += generate_random_sorted_history_description(bot_data).as_str();
         }
     }
     
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("History").description(history_string.as_str()).color(COLOR_BOT)
+        |embed| embed.title("Verlauf").description(history_string.as_str()).color(COLOR_BOT)
     );
+}
+
+/**
+ * Generates the description for the user sorted history
+ */
+fn generate_user_sorted_history_description(bot_data: &crate::BotData) -> String {
+    let user_movies = create_user_sorted_history(bot_data);
+    let mut history_string = String::new();
+
+    // For every user
+    for (user, entry_vector) in user_movies.iter().sorted() {
+        history_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
+        
+        let mut time_sorted_vector = entry_vector.clone();
+        
+        time_sorted_vector.sort_by( 
+            |a, b| 
+            a.1.watched_or_removed_timestamp
+                .expect("Movie did not have a watched_or_removed timestamp in show_history")
+                .cmp(
+                    &b.1.watched_or_removed_timestamp
+                    .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                )
+            );
+
+        // For every movie entry
+        for (id, entry) in time_sorted_vector {
+            history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | {} am {}\n\n", 
+                entry.status.get_emoji(), 
+                entry.movie.movie_title, 
+                get_movie_link(entry.movie.tmdb_id, false),
+                id.to_string(),
+                if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
+                timestamp_to_string(
+                    &entry.watched_or_removed_timestamp
+                        .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                    , false)
+                ).as_str();
+        }
+
+        history_string += "\n";
+    }
+
+    history_string
 }
 
 /**
@@ -842,6 +679,46 @@ fn create_user_sorted_history(bot_data: &crate::BotData) -> HashMap<&String, Vec
     }
 
     user_movies
+}
+
+fn generate_random_sorted_history_description(bot_data: &crate::BotData) -> String {
+    let mut history_string = String::new();
+
+    let mut time_sorted_vector = bot_data.watch_list.clone().into_iter()
+        .filter(|(_id, entry)| entry.status.is_history_status())
+        .map(|(id, entry)| (id, entry))
+        .collect::<Vec<(u32, WatchListEntry)>>();
+
+    time_sorted_vector.sort_by( 
+        |a, b| 
+        a.1.watched_or_removed_timestamp
+            .expect("Movie did not have a watched_or_removed timestamp in show_history")
+            .cmp(
+                &b.1.watched_or_removed_timestamp
+                .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+            )
+        );
+
+    // For every movie entry
+    for (id, entry) in time_sorted_vector {
+        if entry.status.is_history_status() {
+            history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}**, {} am {}\n\n", 
+                entry.status.get_emoji(), 
+                entry.movie.movie_title, 
+                get_movie_link(entry.movie.tmdb_id, false),
+                id.to_string(),
+                entry.user, 
+                if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
+                timestamp_to_string(
+                    &entry.watched_or_removed_timestamp
+                    .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                    , false
+                )
+            ).as_str();
+        }
+    }
+
+    history_string
 }
 
 /**
@@ -874,8 +751,6 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
         let movie = bot_data.watch_list.get(&id);
         match movie {
             Some(watch_list_entry) => {
-                let original_movie_status = watch_list_entry.status.clone();
-
                 // Only allow change of status if the user has the admin role
                 if user_is_admin {
                     let mut updated_entry = WatchListEntry {
@@ -889,57 +764,15 @@ pub fn set_status(bot_data: &mut crate::BotData, id: u32, status: String) {
                         updated_entry.watched_or_removed_timestamp = Some(message.timestamp);
                     }
 
-                    let _ = bot_data.bot.send_embed(
-                        message.channel_id,
-                        "",
-                        |embed| embed
-                        .title(
-                            format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", 
-                                id, 
-                                updated_entry.movie.movie_title, 
-                                updated_entry.user
-                            ).as_str()
-                        )
-                        .description(
-                            format!("
-                            **von** {} ({}) **zu** {} ({})", 
-                                original_movie_status.get_emoji(), 
-                                original_movie_status, 
-                                updated_entry.status.get_emoji(), 
-                                updated_entry.status,
-                            ).as_str()
-                        )
-                        .color(COLOR_SUCCESS)
-                    );
+                    send_message::status_changed_successfully(bot_data);
                     let _ = bot_data.watch_list.insert(id, updated_entry);
                 // If the user is not an admin and did not add the movie himself he is not permitted to change it
                 } else {
-                    let _ = bot_data.bot.send_embed(
-                        message.channel_id,
-                        "",
-                        |embed| embed.description(
-                            format!("Du hat nicht genügend Rechte um den Status des Films zu ändern. Klagen bitte an das Verfassungsgericht.
-                            `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
-                                id, 
-                                watch_list_entry.status.get_emoji(), 
-                                watch_list_entry.movie.movie_title,
-                                timestamp_to_string(&watch_list_entry.added_timestamp, true),
-                                watch_list_entry.user_id
-                            ).as_str(),
-                        )
-                        .color(COLOR_WARNING)
-                    );
+                    send_message::insufficient_permissions_error(bot_data);
                 }
             },
             None => {
-                let _ = bot_data.bot.send_embed(
-                    message.channel_id,
-                    "",
-                    |embed| embed.description(
-                        format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
-                    )
-                    .color(COLOR_ERROR)
-                );
+                send_message::movie_id_not_found_error(bot_data, &id);
             }
         }
     } else {
@@ -973,8 +806,6 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
 
             match movie {
                 Some(watch_list_entry) => {
-                    let original_movie_status = watch_list_entry.status.clone();
-
                     // Only allow change of status if the user has the admin role
                     if user_is_admin {
                         let updated_entry = WatchListEntry {
@@ -985,57 +816,15 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
                             ..*watch_list_entry
                         };
 
-                        let _ = bot_data.bot.send_embed(
-                            message.channel_id,
-                            "",
-                            |embed| embed
-                            .title(
-                                format!("Status des Films `{:0>4}` **{}** hinzugefügt von {} wurde geändert.", 
-                                    id, 
-                                    updated_entry.movie.movie_title, 
-                                    updated_entry.user
-                                ).as_str()
-                            )
-                            .description(
-                                format!("
-                                **von** {} ({}) **zu** {} ({})", 
-                                    original_movie_status.get_emoji(), 
-                                    original_movie_status, 
-                                    updated_entry.status.get_emoji(), 
-                                    updated_entry.status,
-                                ).as_str()
-                            )
-                            .color(COLOR_SUCCESS)
-                        );
+                        send_message::status_changed_successfully(bot_data);
                         let _ = bot_data.watch_list.insert(id, updated_entry);
                     // If the user is not an admin and did not add the movie himself he is not permitted to change it
                     } else {
-                        let _ = bot_data.bot.send_embed(
-                            message.channel_id,
-                            "",
-                            |embed| embed.description(
-                                format!("Du hat nicht genügend Rechte um den Status des Films zu ändern. Klagen bitte an das Verfassungsgericht.
-                                `{:0>4}` {} **{}** | hinzugefügt am *{}* von <@{}>", 
-                                    id, 
-                                    watch_list_entry.status.get_emoji(), 
-                                    watch_list_entry.movie.movie_title,
-                                    timestamp_to_string(&watch_list_entry.added_timestamp, true),
-                                    watch_list_entry.user_id
-                                ).as_str(),
-                            )
-                            .color(COLOR_WARNING)
-                        );
+                        send_message::insufficient_permissions_error(bot_data);
                     }
                 },
                 None => {
-                    let _ = bot_data.bot.send_embed(
-                        message.channel_id,
-                        "",
-                        |embed| embed.description(
-                            format!("Ein Film mit der ID `{:0>4}` konnte nicht gefunden werden.", id).as_str(),
-                        )
-                        .color(COLOR_ERROR)
-                    );
+                    send_message::movie_id_not_found_error(bot_data, &id);
                 }
             }
         } else {
@@ -1057,16 +846,9 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
  */
 pub fn show_movie_by_id(bot_data: &crate::BotData, id: u32) {
     if let Some(entry) = bot_data.watch_list.get(&id) {
-        let _ = send_movie_information_message(bot_data, entry, false, false);
+        let _ = send_message::movie_information(bot_data, entry, false, false);
     } else {
-        let _ = bot_data.bot.send_embed(
-            bot_data.message.as_ref().expect("Passing of message to show_movie_by_id function failed.").channel_id,
-            "",
-            |embed| embed
-            .title("Film existiert nicht")
-            .description("Ein Film mit dieser ID existiert weder in der Watch list noch in der History.")
-            .color(COLOR_ERROR)
-        );
+        send_message::movie_id_not_found_error(bot_data, &id);
     }
 }
 
@@ -1077,14 +859,7 @@ pub fn show_movie_by_title(bot_data: &crate::BotData, title: String) {
     if let Some(id) = get_movie_id_in_watch_list(title.as_str(), &bot_data.watch_list) {
         return show_movie_by_id(bot_data, id);
     } else {
-        let _ = bot_data.bot.send_embed(
-            bot_data.message.as_ref().expect("Passing of message to show_movie_by_title function failed.").channel_id,
-            "",
-            |embed| embed
-            .title("Film existiert nicht")
-            .description("Ein Film mit diesem Namen existiert weder in der Watch list noch in der History.")
-            .color(COLOR_ERROR)
-        );
+        send_message::movie_title_not_found_error(bot_data, title);
     }
 }
 
@@ -1095,7 +870,7 @@ pub fn set_movie_limit(bot_data: &mut crate::BotData, new_limit: u32) {
     let message = bot_data.message.clone().expect("Passing of message to set_movie_limit failed.");
     
     if !is_user_administrator(bot_data, message.author.id) {
-        return send_insufficient_permissions_error_message(bot_data);
+        return send_message::insufficient_permissions_error(bot_data);
     }
 
     let old_limit = bot_data.movie_limit_per_user;
@@ -1112,20 +887,6 @@ pub fn set_movie_limit(bot_data: &mut crate::BotData, new_limit: u32) {
 }
 
 /**
- * Sends a message that the user has insufficient permissions
- */
-fn send_insufficient_permissions_error_message(bot_data: &crate::BotData) {
-    let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_insufficient_permissions_error_message failed.").channel_id,
-        "",
-        |embed| embed
-            .title("Keine Berechtigung")
-            .description("Leider besitzt du nicht die benötigte Berechtigung für dieses Kommando.")
-            .color(crate::COLOR_ERROR)
-    );
-}
-
-/**
  * Sends a message showing the current movie limit
  */
 pub fn show_movie_limit(bot_data: &crate::BotData) {
@@ -1137,32 +898,6 @@ pub fn show_movie_limit(bot_data: &crate::BotData) {
             .description(format!("Das aktuelle Filmlimit beträgt `{}` pro Nutzer.", bot_data.movie_limit_per_user).as_str())
             .color(crate::COLOR_INFORMATION)
     );
-}
-
-/**
- * Checks all roles of the user for admin permissions and returns true if the user has at least one
- * role with those permissions
- */
-pub fn is_user_administrator(bot_data: &crate::BotData, user_id: Model::UserId) -> bool {
-    let author_role_ids = bot_data.bot.get_member(bot_data.server_id, user_id).expect("Retrieval of author user failed.").roles;
-
-    for role in &bot_data.server_roles {
-        if author_role_ids.contains(&role.id) {
-            if is_role_administrator(role) {
-                return true
-            }
-        }
-    }
-
-    return false
-}
-
-/**
- * Returns true if the given role has administrator permissions
- */
-fn is_role_administrator(role: &Model::Role) -> bool {
-    let admin_permissions = Model::permissions::Permissions::ADMINISTRATOR;
-    role.permissions.contains(admin_permissions)
 }
 
 /**
