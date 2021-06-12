@@ -24,6 +24,7 @@ pub enum Command {
     CloseVote,
     SetMovieVoteLimit(u32),
     ShowMovieVoteLimit,
+    RandomMovieVote(Option<u32>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,6 +49,7 @@ pub enum ParseCommandError {
     WrongArgumentsForMovieLimit,
     WrongArgumentsForMovieVoteLimit,
     WrongArgumentsForSendVoteWithUserId,
+    WrongArgumentForRandomMovieVote,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -70,6 +72,7 @@ pub enum SimpleCommand {
     SendVote,
     CloseVote,
     MovieVoteLimit,
+    RandomMovieVote,
     Unknown(String),
 }
 
@@ -94,6 +97,7 @@ impl From<&str> for SimpleCommand {
             CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             MOVIE_LIMIT | MOVIE_LIMIT_SHORT => Self::MovieLimit,
             MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => Self::MovieVoteLimit,
+            RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => Self::RandomMovieVote,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -329,6 +333,19 @@ impl FromStr for Command {
                     return Err(ParseCommandError::WrongArgumentsForMovieVoteLimit);
                 }
             },
+            RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => {
+                let argument = arguments.join(" ");
+                if argument.is_empty() {
+                    return Ok(Self::RandomMovieVote(None));
+                }
+
+                // Try to parse the first argument to u32
+                if let Ok(n) = argument.parse::<u32>() {
+                    Self::RandomMovieVote(Some(n))
+                } else {
+                    return Err(ParseCommandError::WrongArgumentForRandomMovieVote);
+                }
+            },
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -369,3 +386,5 @@ pub const CLOSE_VOTE: &str = "close_vote"; // !close_vote | Closes the current v
 pub const CLOSE_VOTE_SHORT: &str = "xv"; // !xv | Short form for close_vote
 pub const MOVIE_VOTE_LIMIT: &str = "movie_vote_limit"; // !movie_vote_limit <optional: number> | Sets the amount of movies that are selected for a new movie vote
 pub const MOVIE_VOTE_LIMIT_SHORT: &str = "mvl"; // !mvl <optional: number> | Short form for movie_vote_limit
+pub const RANDOM_MOVIE_VOTE: &str = "random_movie_vote"; // !random_movie_vote <optional: number> | Creates a new random movie vote with optional given movie limit
+pub const RANDOM_MOVIE_VOTE_SHORT: &str = "rmv"; // !rmv <optional: number> | Short form for random_movie_vote
