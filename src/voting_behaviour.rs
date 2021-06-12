@@ -80,10 +80,13 @@ fn get_random_unique_emojis(amount: usize) -> Option<HashSet<String>> {
  * or movie title. If this is the case the corresponding movie is stored in the option. Otherwise
  * the option is stored as a general option.
  */
-pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<String>) {
+pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<String>, is_movie_vote: bool) {
     let message = bot_data.message.as_ref().expect("Passing message to create_vote function failed.");
 
-    if user_already_owns_a_vote(bot_data, message.author.id) {
+    let creator = if is_movie_vote { bot_data.bot_user.clone() } else { message.author.clone() };
+
+    if user_already_owns_a_vote(bot_data, creator.id) {
+        // TODO: Send the random movie vote if it already exists
         send_message::user_already_owns_a_vote_error(bot_data);
         return;
     } else {
@@ -168,7 +171,7 @@ pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<St
 
         // Create the new instance of the vote struct
         let mut new_vote = Vote {
-            creator: message.author.clone(),
+            creator: creator.clone(),
             creation_date: message.timestamp,
             title: title,
             options: vote_options,
@@ -618,4 +621,80 @@ pub fn show_movie_vote_limit(bot_data: &crate::BotData) {
             )
             .color(crate::COLOR_INFORMATION)
     );
+}
+
+/**
+ * Creates a new random movie vote with the given optional limit
+ * The movies which are longest on the list have a greater chance of getting selected
+ */
+pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: Option<u32>) {
+    use rand::{seq::IteratorRandom, thread_rng, Rng};
+    use crate::movie_behaviour;
+
+    // Get the three (or less) movies that have earliest creation date (lowest id)
+    let mut earliest_movie_ids_vec : Vec<&u32> = movie_behaviour::get_three_earliest_movie_ids(bot_data);
+    earliest_movie_ids_vec.reverse();
+    
+    let limit = get_movie_limit_or_optional_limit_as_usize(bot_data, optional_limit);
+    if limit.is_none() {
+        return;
+    }
+
+    let limit = limit.unwrap();
+
+    let mut rng = thread_rng();
+
+    let mut random_movies : Vec<&u32> = bot_data.watch_list
+        .iter()
+        .choose_multiple(&mut rng, limit)
+        .iter()
+        .map(|(id, _)| *id)
+        .collect();
+
+    let mut removed_earliest_ids : Vec<u32> = Vec::new();
+
+    // Remove all duplicates
+    for i in 0..earliest_movie_ids_vec.len() {
+        let idx = i - removed_earliest_ids.len();
+        if random_movies.contains(&earliest_movie_ids_vec[idx]) {
+            removed_earliest_ids.push(*earliest_movie_ids_vec[idx]);
+            earliest_movie_ids_vec.remove(idx);
+        }
+    }
+
+    // Swap the random movies with earliest movies by chance. Skips the earliest movies that already are in the vote
+    for id in random_movies.iter_mut() {
+        if !removed_earliest_ids.contains(id) && rng.gen_bool(0.4) {
+            let earliest_movie = earliest_movie_ids_vec.pop();
+
+            match earliest_movie {
+                None => break,
+                Some(movie_id) => *id = movie_id
+            };
+        }
+    }
+
+    let options_vec : Vec<String> = random_movies.iter().map(|x| format!("id:{}", x)).collect();
+
+    create_vote(bot_data, String::from("Nächster Film"), options_vec, true);
+}
+
+/**
+ * Returns the optional limit if it is_some, or the set limit from bot data, each converted to usize
+ */
+fn get_movie_limit_or_optional_limit_as_usize(bot_data: &crate::BotData, optional_limit: Option<u32>) -> Option<usize> {
+    use std::convert::TryInto;
+    
+    let limit = match optional_limit {
+        Some(limit) => limit,
+        None => bot_data.movie_vote_limit,
+    };
+    let limit = limit.try_into();
+
+    if limit.is_err() {
+        send_message::unknown_error_occured(bot_data, 100);
+        return None;
+    } else {
+        return Some(limit.unwrap());
+    }
 }

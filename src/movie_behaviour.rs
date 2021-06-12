@@ -923,3 +923,17 @@ fn find_id_by_tmdb_id(tmdb_id: u64, watch_list: &HashMap<u32, WatchListEntry>) -
     }
     None
 }
+
+/**
+ * Extracts the three earliest movies from the watch list
+ */
+pub fn get_three_earliest_movie_ids(bot_data: &crate::BotData) -> Vec<&u32> {
+    let mut all_ids : Vec<&u32> = bot_data.watch_list.keys().collect();
+    all_ids.sort();
+
+    if all_ids.len() >= 3 {
+        return all_ids[0..3].to_vec();
+    } else {
+        return all_ids[0..all_ids.len()].to_vec();
+    }
+}

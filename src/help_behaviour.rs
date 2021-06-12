@@ -32,6 +32,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     `close_vote`
     `create_vote`
     `movie_vote_limit`
+    `random_movie_vote`
     `send_vote`";
 
     let _ = bot_data.bot.send_embed(
@@ -502,5 +503,33 @@ pub fn show_help_movie_vote_limit(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Movie vote limit - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the random_movie_vote command
+ */
+pub fn show_help_random_movie_vote(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_random_movie_vote function failed.");
+
+    let help_str =
+    "Erstellt eine neue Filmabstimmung mit zufälligen Filmen aus der Filmliste. Wenn eine positive Zahl als Parameter 
+    angegeben wird, werden so viele Filme wie angegeben zur Abstimmung ausgewählt. Ansonsten wird das gesetzte Limit
+    benutzt.
+    
+    **Nutzung**
+    !random_movie_vote <Optional: positive ganze Zahl>
+    
+    **Beispiel**
+    !random_movie_vote
+    !random_movie_vote 5
+    
+    **Aliase**
+    `random_movie_vote`, `rmv`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Random movie vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }

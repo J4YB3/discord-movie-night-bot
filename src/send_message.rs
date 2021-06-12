@@ -1,4 +1,4 @@
-use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, movie_behaviour, general_behaviour};
+use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, COLOR_INFORMATION, movie_behaviour, general_behaviour};
 
 /**
  * Sends a message that the user has insufficient permissions
@@ -36,7 +36,7 @@ pub fn movie_already_exists(bot_data: &crate::BotData, id: u32, tmdb_id: u64) {
             )
             .as_str()
         )
-        .color(COLOR_ERROR)
+        .color(COLOR_INFORMATION)
     );
 }
 
@@ -315,5 +315,20 @@ pub fn emoji_not_part_of_vote_info(bot_data: &mut crate::BotData) {
         .title("Emoji ist nicht Teil der Abstimmung")
         .description("Danke für deine Reaktion auf meine Nachricht, aber ich bin verpflichtet dir mitzuteilen, dass dieses Emoji nicht Teil der Abstimmung ist. Falls du eine Stimme abgeben möchtest reagiere bitte mit einem passenden Emoji.")
         .color(crate::COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Sends an error message, that an unknown error occured
+ */
+pub fn unknown_error_occured(bot_data: &crate::BotData, err_code: u32) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::unknown_error_occured failed.").channel_id, 
+        "",
+        |embed| embed
+        .title(format!("Unerwarteter Fehler {}", err_code).as_str())
+        .description(format!("Es ist ein unerwarteter Fehler aufgetreten (Fehlercode {}). 
+            Bitte kontaktiere den Programmierer", err_code).as_str())
+        .color(crate::COLOR_ERROR)
     );
 }

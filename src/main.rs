@@ -13,6 +13,7 @@ mod help_behaviour;
 
 pub struct BotData {
     bot: Discord,
+    bot_user: discord::model::User,
     message: Option<Model::Message>,
     watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
     next_movie_id: u32,
@@ -49,8 +50,17 @@ fn main() {
         language: "de",
     };
 
+    let state_user = state.user();
+
     let mut bot_data = BotData {
         bot: bot,
+        bot_user: Model::User {
+            id: state_user.id,
+            name: state_user.username.clone(),
+            discriminator: state_user.discriminator,
+            avatar: state_user.avatar.clone(),
+            bot: state_user.bot,
+        },
         message: None,
         watch_list: watch_list,
         next_movie_id: 0,
@@ -214,6 +224,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::CloseVote => help_behaviour::show_help_close_vote(bot_data),
             SimpleCommand::MovieLimit => help_behaviour::show_help_movie_limit(bot_data),
             SimpleCommand::MovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
+            SimpleCommand::RandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -237,7 +248,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieById(id) => movie_behaviour::show_movie_by_id(bot_data, id),
         ShowMovieByTitle(title) => movie_behaviour::show_movie_by_title(bot_data, title),
         SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
-        CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options),
+        CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options, false),
         SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data, None),
         SendVoteWithUserId(user_id) => voting_behaviour::determine_vote_and_send_details_message(bot_data, Some(user_id)),
         CloseVote => voting_behaviour::close_vote(bot_data),
@@ -245,6 +256,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieLimit => movie_behaviour::show_movie_limit(bot_data),
         SetMovieVoteLimit(number) => voting_behaviour::set_movie_vote_limit(bot_data, number),
         ShowMovieVoteLimit => voting_behaviour::show_movie_vote_limit(bot_data),
+        RandomMovieVote(optional_limit) => voting_behaviour::create_random_movie_vote(bot_data, optional_limit),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -276,5 +288,6 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         WrongArgumentsForMovieLimit => help_behaviour::show_help_movie_limit(bot_data),
         WrongArgumentsForMovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
         WrongArgumentsForSendVoteWithUserId => help_behaviour::show_help_send_vote(bot_data),
+        WrongArgumentForRandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
     }
 }
