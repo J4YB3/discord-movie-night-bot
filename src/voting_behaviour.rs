@@ -208,7 +208,7 @@ fn user_already_owns_a_vote(bot_data: &crate::BotData, user_id: discord::model::
  * message_id to the vote and inserts it into the votes
  * If the vote already exists in the bot_data, updates the key of the corresponding entry
  * 
- * Returns true if the message was sent successfully, false otherwise
+ * Returns Some(message_id) if the message was sent successfully, None otherwise
  */
 pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote) -> Option<discord::model::MessageId> {
     let embed_description: String = build_vote_embed_description(vote);
@@ -271,7 +271,6 @@ pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote)
 
         return Some(vote_message.id);
     } else {
-        send_message::vote_message_failed_to_send_error(bot_data);
         return None;
     }
 }
