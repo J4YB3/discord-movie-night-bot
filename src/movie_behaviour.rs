@@ -46,7 +46,7 @@ impl MovieStatus {
     /**
      * Returns true if a movie with this status should be shown on the watch list
      */
-    fn is_watch_list_status(&self) -> bool {
+    pub fn is_watch_list_status(&self) -> bool {
         match self {
             MovieStatus::NotWatched | MovieStatus::Rewatch | MovieStatus::Unavailable => true,
             _ => false,
@@ -905,7 +905,8 @@ pub fn show_movie_limit(bot_data: &crate::BotData) {
  */
 pub fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchListEntry>) -> Option<u32> {
     for (id, entry) in watch_list {
-        if entry.movie.movie_title.to_lowercase() == title.to_lowercase() || entry.movie.original_title.to_lowercase() == title.to_lowercase() {
+        if entry.movie.movie_title.to_lowercase() == title.to_lowercase() 
+            || entry.movie.original_title.to_lowercase() == title.to_lowercase() {
             return Some(*id);
         }
     }
@@ -915,7 +916,7 @@ pub fn get_movie_id_in_watch_list(title: &str, watch_list: &HashMap<u32, WatchLi
 /**
  * Returns the watch list id of the movie if the movie was found
  */
-fn find_id_by_tmdb_id(tmdb_id: u64, watch_list: &HashMap<u32, WatchListEntry>) -> Option<&u32> {
+pub fn find_id_by_tmdb_id(tmdb_id: u64, watch_list: &HashMap<u32, WatchListEntry>) -> Option<&u32> {
     for (id, entry) in watch_list {
         if entry.movie.tmdb_id == tmdb_id {
             return Some(id);
@@ -928,12 +929,62 @@ fn find_id_by_tmdb_id(tmdb_id: u64, watch_list: &HashMap<u32, WatchListEntry>) -
  * Extracts the three earliest movies from the watch list
  */
 pub fn get_three_earliest_movie_ids(bot_data: &crate::BotData) -> Vec<&u32> {
-    let mut all_ids : Vec<&u32> = bot_data.watch_list.keys().collect();
+    let mut all_ids : Vec<&u32> = bot_data.watch_list
+        .iter()
+        // Filters all movies to be in the watch list, not the history, and returns their ids
+        .filter_map(|(id, entry)| 
+            if entry.status.is_watch_list_status() { 
+                Some(id)
+            } else { 
+                None 
+            }
+        )
+        .collect();
+
     all_ids.sort();
 
     if all_ids.len() >= 3 {
         return all_ids[0..3].to_vec();
     } else {
         return all_ids[0..all_ids.len()].to_vec();
+    }
+}
+
+/**
+ * Handles the case, that after the closing of the random movie vote a movie should become watched or not
+ */
+pub fn handle_add_movie_to_watched_after_movie_vote(bot_data: &mut crate::BotData, reaction: &discord::model::Reaction, movie: &Movie) {
+    if let discord::model::ReactionEmoji::Unicode(emoji) = &reaction.emoji {
+        if emoji == "✅" {
+            if let Some(watch_list_id) = find_id_by_tmdb_id(movie.tmdb_id, &bot_data.watch_list.clone()) {
+                // If the id was found, try to set the status to watched
+                set_status_watched(bot_data, *watch_list_id, String::new());
+                remove_set_status_watched_from_wait_for_reaction(bot_data, &reaction.message_id);
+            } else {
+                send_message::movie_not_found_in_watchlist_error(bot_data, movie.movie_title.clone());
+            }
+            return;
+        } else if emoji == "❎" {
+            send_message::movie_not_added_to_watched_information(bot_data);
+            remove_set_status_watched_from_wait_for_reaction(bot_data, &reaction.message_id);
+            return;
+        }
+    }
+
+    send_message::emoji_not_part_of_vote_info(bot_data);
+}
+
+/**
+ * Finds the previous vote message in the wait_for_reaction vector of bot_data and removes the entry
+ */
+fn remove_set_status_watched_from_wait_for_reaction(bot_data: &mut crate::BotData, previous_message_id: &discord::model::MessageId) {
+    // Remove previous wait_for_reaction of previous vote
+    for i in 0..bot_data.wait_for_reaction.len() {
+        if let crate::general_behaviour::WaitingForReaction::AddMovieToWatched(some_message_id, _) = bot_data.wait_for_reaction[i] {
+            if *previous_message_id == some_message_id {
+                bot_data.wait_for_reaction.remove(i);
+                break;
+            }
+        }
     }
 }

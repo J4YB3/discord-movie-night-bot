@@ -241,6 +241,9 @@ pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote)
     );
 
     if let Ok(vote_message) = vote_message {
+        // Remove the reactions from the previous message
+        remove_all_reactions_on_previous_vote(bot_data, vote, (&vote_message.channel_id, &vote.message_id));
+
         // Add the reactions to the message
         for vote_option in vote.options.iter() {
             match vote_option {
@@ -632,7 +635,7 @@ pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: O
         if optional_limit.is_some() {
             send_message::there_is_already_a_random_movie_vote_information(bot_data);
         }
-        
+
         send_random_movie_vote_again(bot_data);
         return;
     }
@@ -655,6 +658,7 @@ pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: O
 
     let mut random_movies : Vec<&u32> = bot_data.watch_list
         .iter()
+        .filter(|(_, entry)| entry.status.is_watch_list_status())
         .choose_multiple(&mut rng, limit)
         .iter()
         .map(|(id, _)| *id)
@@ -714,14 +718,12 @@ fn get_movie_limit_or_optional_limit_as_usize(bot_data: &crate::BotData, optiona
  * random_movie_vote
  */
 fn send_random_movie_vote_again(bot_data: &mut crate::BotData) {
-    let bot_user_id = bot_data.bot_user.id;
-
     // Find the random movie vote in the votes
-    if let Some(random_movie_vote) = bot_data.votes.iter_mut()
-        .find(|(_, vote)| vote.creator.id == bot_user_id) 
-    {
-        let mut the_vote = random_movie_vote.1.clone();
-        
+    if let Some(message_id) = find_random_movie_vote(bot_data) {
+        // Extract the vote as mutable from the bot_data
+        // This can not panic, since the vote was found by 'find_random_movie_vote'
+        let mut the_vote = bot_data.votes.get_mut(&message_id.0).unwrap().clone();
+
         // Send the vote details message and assign it to the bot_data
         // If the sending was successful, add the vote to the waiting_for_reaction list
         if let Some(message_id) = send_vote_details_message(bot_data, &mut the_vote) {
@@ -729,8 +731,137 @@ fn send_random_movie_vote_again(bot_data: &mut crate::BotData) {
         } else {
             send_message::vote_message_failed_to_send_error(bot_data);
         }
-        
     } else {
         send_message::no_random_movie_vote_exists_error(bot_data);
     }
+}
+
+/**
+ * Finds the random movie vote in the bot data and returns its MessageId, or None if the vote couldn't be found
+ */
+fn find_random_movie_vote(bot_data: &mut crate::BotData) -> Option<discord::model::MessageId> {
+    let bot_user_id = bot_data.bot_user.id;
+
+    // Find the random movie vote in the votes
+    if let Some(random_movie_vote) = bot_data.votes.iter_mut()
+        .find(|(_, vote)| vote.creator.id == bot_user_id) 
+    {
+        return Some(discord::model::MessageId(*random_movie_vote.0));
+    } else {
+        return None;
+    }
+}
+
+pub fn close_random_movie_vote(bot_data: &mut crate::BotData) {
+    // Find the random movie vote in the votes
+    if let Some(message_id) = find_random_movie_vote(bot_data) {
+        // Extract the vote from the bot_data
+        // This can not panic, since the vote was found by 'find_random_movie_vote'
+        let vote = &bot_data.votes.get(&message_id.0).unwrap().clone();
+
+        let previous_message_id = vote.message_id;
+        let message = bot_data.message.clone().expect("Passing of message to close_random_movie_vote failed.");
+
+        // First remove all reactions on previous vote
+        remove_all_reactions_on_previous_vote(bot_data, vote, (&message.channel_id, &previous_message_id));
+
+        // Send the vote summary message
+        if let Some(_) = send_random_movie_vote_summary_message(bot_data, vote) {
+            remove_previous_vote_from_wait_for_reaction(bot_data, &previous_message_id);
+            let _ = bot_data.votes.remove(&previous_message_id.0);
+        } else {
+            send_message::vote_message_failed_to_send_error(bot_data);
+        }
+        return;
+    }
+
+    // If the user has not vote, send a message
+    send_message::user_has_no_vote_error(bot_data);
+}
+
+fn send_random_movie_vote_summary_message(bot_data: &mut crate::BotData, vote: &Vote) -> Option<discord::model::MessageId> {
+    if let Some(movie_vote_winner) = determine_movie_vote_winner(vote) {
+        let _ = bot_data.bot.send_embed(
+            bot_data.message.clone().expect("Passing message to send_random_movie_vote_summary_message failed.").channel_id,
+            "",
+            |embed| embed
+                .title("Gewinner")
+                .description("Der folgende Film hat die Abstimmung gewonnen:")
+                .author(|author_builder| 
+                    if let Some(avatar_url) = vote.creator.avatar_url() {
+                        author_builder
+                        .name(vote.creator.name.as_str())
+                        .icon_url(avatar_url.as_str())
+                    } else {
+                        author_builder
+                        .name(vote.creator.name.as_str())
+                    }
+                )
+                .color(crate::COLOR_SUCCESS)
+        );
+
+        use crate::movie_behaviour::find_id_by_tmdb_id;
+
+        // Try to get the id of the winner inside the watch list
+        if let Some(watch_list_id_of_winner) = find_id_by_tmdb_id(movie_vote_winner.cargo.tmdb_id, &bot_data.watch_list) {
+            // If the id was found, try to retreive the entry
+            if let Some(movie_entry) = bot_data.watch_list.get(&watch_list_id_of_winner) {
+                // If this also worked, send the message
+                if let Ok(message) = send_message::movie_information(bot_data, movie_entry, false, false) {
+                    // If the message could be sent, generate the watch link and send it
+                    send_message::watch_link(
+                        bot_data, 
+                        &movie_vote_winner.cargo,
+                        true
+                    );
+
+                    // Now return the message id
+                    return Some(message.id);
+                } else {
+                    // If the message couldn't be sent, send an error message
+                    send_message::sending_of_movie_information_message_failed_error(bot_data);
+                }
+            } 
+            // If the entry couldn't be found, send an error message
+            else {
+                send_message::movie_not_found_in_watchlist_error(bot_data, movie_vote_winner.cargo.movie_title);
+            }
+        } 
+        // If the id couldn't be found, send an error message
+        else {
+            send_message::movie_not_found_in_watchlist_error(bot_data, movie_vote_winner.cargo.movie_title);
+        }
+    } 
+    // If there were no movie votes to find the winner, send an error message
+    else {
+        send_message::no_movie_vote_options_in_movie_vote_error(bot_data);
+    }
+
+    return None;
+}
+
+fn determine_movie_vote_winner(vote: &Vote) -> Option<VoteOption<crate::movie_behaviour::Movie>> {
+    let only_movie_options : Vec<&VoteOption<crate::movie_behaviour::Movie>> = vote.options.iter()
+        .filter_map(|option| match option {
+            VoteOptionEnum::GeneralVoteOption(_) => None,
+            VoteOptionEnum::MovieVoteOption(movie_option) => Some(movie_option),
+        })
+        .collect();
+
+    if let Some(max_votes) = only_movie_options.iter()
+        .map(|option| option.votes.len())
+        .max() 
+    {
+        use rand::seq::IteratorRandom;
+        let mut rng = rand::thread_rng();
+
+        if let Some(&random_movie_option_with_max_vote) = only_movie_options.iter()
+            .filter(|option| option.votes.len() == max_votes)
+            .choose(&mut rng)
+        {
+            return Some(random_movie_option_with_max_vote.clone());
+        }
+    }
+
+    return None;
 }

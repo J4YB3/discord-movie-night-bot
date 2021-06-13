@@ -29,6 +29,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     `watch_list`
     
     **Abstimmungen**
+    `close_movie_vote`
     `close_vote`
     `create_vote`
     `movie_vote_limit`
@@ -534,5 +535,31 @@ pub fn show_help_random_movie_vote(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Random movie vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows help on the close_movie_vote command
+ */
+pub fn show_help_close_movie_vote(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_close_movie_vote function failed.");
+
+    let help_str =
+    "Schließt eine bestehende Filmabstimmung, zeigt den Gewinner an, schickt den Watch-Link in den Chat und fragt,
+    ob der gewählte Film direkt als Status 'watched' markiert werden soll.
+    
+    **Nutzung**
+    !close_movie_vote
+    
+    **Beispiel**
+    !close_movie_vote
+    
+    **Aliase**
+    `close_movie_vote`, `cmv`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Close movie vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }

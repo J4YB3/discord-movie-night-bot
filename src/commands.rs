@@ -25,6 +25,7 @@ pub enum Command {
     SetMovieVoteLimit(u32),
     ShowMovieVoteLimit,
     RandomMovieVote(Option<u32>),
+    CloseMovieVote,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,6 +74,7 @@ pub enum SimpleCommand {
     CloseVote,
     MovieVoteLimit,
     RandomMovieVote,
+    CloseMovieVote,
     Unknown(String),
 }
 
@@ -98,6 +100,7 @@ impl From<&str> for SimpleCommand {
             MOVIE_LIMIT | MOVIE_LIMIT_SHORT => Self::MovieLimit,
             MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => Self::MovieVoteLimit,
             RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => Self::RandomMovieVote,
+            CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -346,6 +349,7 @@ impl FromStr for Command {
                     return Err(ParseCommandError::WrongArgumentForRandomMovieVote);
                 }
             },
+            CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -388,3 +392,5 @@ pub const MOVIE_VOTE_LIMIT: &str = "movie_vote_limit"; // !movie_vote_limit <opt
 pub const MOVIE_VOTE_LIMIT_SHORT: &str = "mvl"; // !mvl <optional: number> | Short form for movie_vote_limit
 pub const RANDOM_MOVIE_VOTE: &str = "random_movie_vote"; // !random_movie_vote <optional: number> | Creates a new random movie vote with optional given movie limit
 pub const RANDOM_MOVIE_VOTE_SHORT: &str = "rmv"; // !rmv <optional: number> | Short form for random_movie_vote
+pub const CLOSE_MOVIE_VOTE: &str = "close_movie_vote"; // !close_movie_vote | Closes the current movie vote, presents the results and sends the watch link in the chat.
+pub const CLOSE_MOVIE_VOTE_SHORT: &str = "cmv"; // !cmv | Short form for close_movie_vote

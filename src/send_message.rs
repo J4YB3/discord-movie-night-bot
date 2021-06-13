@@ -214,14 +214,14 @@ pub fn not_enough_emojis_error(bot_data: &crate::BotData) {
 /**
  * Informs the user, that the given movie (either by id or by title) could not be found in the watch_list
  */
-pub fn movie_not_found_in_watchlist_error(bot_data: &crate::BotData, option_string: String) {
+pub fn movie_not_found_in_watchlist_error(bot_data: &crate::BotData, movie_title: String) {
     let _ = bot_data.bot.send_embed(
         bot_data.message.as_ref().expect("Passing message to send_message::movie_not_found_in_watchlist_error failed.").channel_id, 
         "",
         |embed| embed
         .title("Film konnte nicht gefunden werden")
         .description(
-            format!("Die Abstimmung konnte nicht erstellt werden, da die Option '{}' nicht in der Filmliste gefunden werden konnte.", option_string).as_str()
+            format!("Der Film '{}' konnte nicht in der Filmliste gefunden werden.", movie_title).as_str()
         )
         .color(crate::COLOR_ERROR)
     );
@@ -342,8 +342,7 @@ pub fn no_random_movie_vote_exists_error(bot_data: &crate::BotData) {
         "",
         |embed| embed
         .title("Es existiert aktuell keine Filmabstimmung")
-        .description("So wie es aussieht, gibt es aktuell keine Abstimmung über den nächsten Film. Du kannst aber gerne
-            eine neue erstellen.")
+        .description("So wie es aussieht, gibt es aktuell keine Abstimmung über den nächsten Film. Du kannst aber gerne eine neue erstellen.")
         .color(crate::COLOR_ERROR)
     );
 }
@@ -358,6 +357,114 @@ pub fn there_is_already_a_random_movie_vote_information(bot_data: &crate::BotDat
         |embed| embed
         .title("Bestehende Filmabstimmung")
         .description("Es gibt bereits eine bestehende Filmabstimmung. Hier ist sie.")
+        .color(crate::COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Sends the error message, that in the random movie vote there was no vote option to evaluate the results from
+ */
+pub fn no_movie_vote_options_in_movie_vote_error(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::no_movie_vote_options_in_movie_vote_error failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Keine Abstimmungsoptionen")
+        .description("Beim Versuch die Filmabstimmung auszuwerten wurde festgestellt, dass die Abstimmung keine Optionen enthielt. Das Kommando wird daher nicht zu Ende ausgeführt, und es wird kein Watch-Link generiert.")
+        .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sens the error message, that during evaluation of the random_movie_vote the movie information message could not be sent
+ */
+pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Senden fehlgeschlagen")
+        .description("Beim Versuch die Filmabstimmung auszuwerten konnte die Nachricht mit den Details über den Film nicht gesendet werden. Ich erstelle trotzdem einen Watch-Link für euch.")
+        .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sends the watch link as embedded message for the given tmdb_id and movie_title
+ */
+pub fn watch_link(bot_data: &mut crate::BotData, movie: &crate::movie_behaviour::Movie, ask_add_movie_to_watched: bool) {
+    use crate::movie_behaviour::get_movie_link;
+
+    let movie_watch_link = get_movie_link(movie.tmdb_id, true);
+
+    if let Ok(message) = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Watch-Link")
+        .description(format!("Hier ist der Watch-Link für den Film *{}*
+        
+            {}", movie.movie_title, movie_watch_link)
+            .as_str()
+        )
+        .footer(|footer| footer
+            .text(
+                format!("{}", 
+                    if ask_add_movie_to_watched {
+                        "Soll der Film direkt als 'Watched' Status gesetzt werden?"
+                    } else {
+                        ""
+                    }
+                )
+                .as_str()
+            )
+        )
+        .color(crate::COLOR_INFORMATION)
+    ) {
+        if ask_add_movie_to_watched {
+            let _ = bot_data.bot.add_reaction(
+                message.channel_id,
+                message.id,
+                discord::model::ReactionEmoji::Unicode(String::from("✅"))
+            );
+
+            let _ = bot_data.bot.add_reaction(
+                message.channel_id,
+                message.id,
+                discord::model::ReactionEmoji::Unicode(String::from("❎"))
+            );
+    
+            bot_data.wait_for_reaction.push(general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie.clone()));
+        }
+    } else {
+        self::message_failed_to_send_error(bot_data);
+    }
+}
+
+/**
+ * Sends the error message, that a message tried to send, but failed
+ */
+pub fn message_failed_to_send_error(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::message_failed_to_send_error failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Senden fehlgeschlagen")
+        .description("Wie es scheint, konnte eine Nachricht von mir leider nicht korrekt versendet werden. Tur mir Leid.")
+        .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sends an information message, that the movie was not added to the watched status
+ */
+pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::movie_not_added_to_watched_information failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Status nicht geändert")
+        .description("Der Film wurde nicht zum Status 'Watched' hinzugefügt. Bitte denke daran, den Film später manuell hinzuzufügen, falls er geschaut wurde.")
         .color(crate::COLOR_INFORMATION)
     );
 }

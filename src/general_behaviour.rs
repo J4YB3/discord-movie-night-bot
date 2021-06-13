@@ -5,6 +5,7 @@ use regex::Regex;
 pub enum WaitingForReaction {
     AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
     Vote(discord::model::MessageId),
+    AddMovieToWatched(discord::model::MessageId, crate::movie_behaviour::Movie),
 }
 
 /**

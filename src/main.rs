@@ -166,6 +166,20 @@ fn main() {
                                     break;
                                 }
                             },
+                            WaitingForReaction::AddMovieToWatched(message_id, movie) => {
+                                if reaction.message_id == message_id {
+                                    movie_behaviour::handle_add_movie_to_watched_after_movie_vote(
+                                        &mut bot_data, 
+                                        &reaction, 
+                                        &movie
+                                    );
+
+                                    // Vote does not get removed from the wait_for_reaction vector since
+                                    // this will only happen once the vote gets closed by the user
+                                    // Only break the loop since the correct message was found
+                                    break;
+                                }
+                            },
                         }
                     }
                 }
@@ -225,6 +239,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::MovieLimit => help_behaviour::show_help_movie_limit(bot_data),
             SimpleCommand::MovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
             SimpleCommand::RandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
+            SimpleCommand::CloseMovieVote => help_behaviour::show_help_close_movie_vote(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -257,6 +272,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         SetMovieVoteLimit(number) => voting_behaviour::set_movie_vote_limit(bot_data, number),
         ShowMovieVoteLimit => voting_behaviour::show_movie_vote_limit(bot_data),
         RandomMovieVote(optional_limit) => voting_behaviour::create_random_movie_vote(bot_data, optional_limit),
+        CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
