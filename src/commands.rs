@@ -26,7 +26,7 @@ pub enum Command {
     ShowMovieVoteLimit,
     RandomMovieVote(Option<u32>),
     CloseMovieVote,
-    Version,
+    Info,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,7 +76,7 @@ pub enum SimpleCommand {
     MovieVoteLimit,
     RandomMovieVote,
     CloseMovieVote,
-    Version,
+    Info,
     Unknown(String),
 }
 
@@ -103,7 +103,7 @@ impl From<&str> for SimpleCommand {
             MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => Self::MovieVoteLimit,
             RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => Self::RandomMovieVote,
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
-            VERSION => Self::Version,
+            INFO => Self::Info,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -353,7 +353,7 @@ impl FromStr for Command {
                 }
             },
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
-            VERSION => Self::Version,
+            INFO => Self::Info,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -365,7 +365,7 @@ pub const QUIT: &str = "quit"; // !quit | Quits the bot and saves all changes
 pub const HELP: &str = "help"; // !help <optional: command> | Shows a list of available commands or help to one specific command
 pub const HELP_SHORT: &str = "h"; // !h <optional: command> | Short form for help
 pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
-pub const VERSION: &str = "version"; // !version | Shows the version number of the bot
+pub const INFO: &str = "info"; // !info | Shows the version number of the bot
 
 // Movies
 pub const ADD_MOVIE: &str = "add_movie"; // !add_movie <title|imdb_link> | Adds a movie to the watch list

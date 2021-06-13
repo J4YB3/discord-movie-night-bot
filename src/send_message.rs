@@ -470,14 +470,15 @@ pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
 }
 
 /**
- * Sends the version message
+ * Sends the info message
  */
-pub fn version(bot_data: &crate::BotData) {
+pub fn info(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         bot_data.message.as_ref().expect("Passing message to send_message::version failed.").channel_id, 
         "",
         |embed| embed
         .fields(|builder| builder
+            .field("Author", "Jan Bechtold", true)
             .field("Aktuelle Version", crate::VERSION, false)
         )
         .color(crate::COLOR_BOT)

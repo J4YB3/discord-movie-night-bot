@@ -565,26 +565,26 @@ pub fn show_help_close_movie_vote(bot_data: &crate::BotData) {
 }
 
 /**
- * Shows help on the version command
+ * Shows help on the info command
  */
-pub fn show_help_version(bot_data: &crate::BotData) {
-    let message = bot_data.message.as_ref().expect("Passing message to show_help_version function failed.");
+pub fn show_help_info(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_info function failed.");
 
     let help_str =
-    "Zeigt die aktuelle Versionsnummer des Bots an.
+    "Zeigt Informationen über den Bot an.
     
     **Nutzung**
-    !version
+    !info
     
     **Beispiel**
-    !version
+    !info
     
     **Aliase**
-    `version`";
+    `info`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Version - Hilfe").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Info - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
