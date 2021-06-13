@@ -563,3 +563,28 @@ pub fn show_help_close_movie_vote(bot_data: &crate::BotData) {
         |embed| embed.title(":information_source: Close movie vote - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
+
+/**
+ * Shows help on the version command
+ */
+pub fn show_help_version(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_version function failed.");
+
+    let help_str =
+    "Zeigt die aktuelle Versionsnummer des Bots an.
+    
+    **Nutzung**
+    !version
+    
+    **Beispiel**
+    !version
+    
+    **Aliase**
+    `version`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Version - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}

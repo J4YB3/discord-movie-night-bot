@@ -33,6 +33,8 @@ const COLOR_WARNING: u64 = 0xf5d442; // yellow
 const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
+const VERSION: &str = "0.4.5";
+
 fn main() {
     let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
     let votes: HashMap<u64, voting_behaviour::Vote> = HashMap::new();
@@ -240,6 +242,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::MovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
             SimpleCommand::RandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
             SimpleCommand::CloseMovieVote => help_behaviour::show_help_close_movie_vote(bot_data),
+            SimpleCommand::Version => help_behaviour::show_help_version(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -273,6 +276,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieVoteLimit => voting_behaviour::show_movie_vote_limit(bot_data),
         RandomMovieVote(optional_limit) => voting_behaviour::create_random_movie_vote(bot_data, optional_limit),
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
+        Version => send_message::version(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }

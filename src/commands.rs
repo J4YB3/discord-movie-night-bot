@@ -26,6 +26,7 @@ pub enum Command {
     ShowMovieVoteLimit,
     RandomMovieVote(Option<u32>),
     CloseMovieVote,
+    Version,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -75,6 +76,7 @@ pub enum SimpleCommand {
     MovieVoteLimit,
     RandomMovieVote,
     CloseMovieVote,
+    Version,
     Unknown(String),
 }
 
@@ -101,6 +103,7 @@ impl From<&str> for SimpleCommand {
             MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => Self::MovieVoteLimit,
             RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => Self::RandomMovieVote,
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
+            VERSION => Self::Version,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -350,22 +353,27 @@ impl FromStr for Command {
                 }
             },
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
+            VERSION => Self::Version,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
 }
 
 // Command, Usage | Description
+// General
 pub const QUIT: &str = "quit"; // !quit | Quits the bot and saves all changes
+pub const HELP: &str = "help"; // !help <optional: command> | Shows a list of available commands or help to one specific command
+pub const HELP_SHORT: &str = "h"; // !h <optional: command> | Short form for help
+pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
+pub const VERSION: &str = "version"; // !version | Shows the version number of the bot
+
+// Movies
 pub const ADD_MOVIE: &str = "add_movie"; // !add_movie <title|imdb_link> | Adds a movie to the watch list
 pub const ADD_MOVIE_SHORT: &str = "am"; // !am <title|imdb_link> | Short form for add_movie
 pub const REMOVE_MOVIE: &str = "remove_movie"; // !remove_movie <title|id> | Removes a movie by id or by title from the watch list
 pub const REMOVE_MOVIE_SHORT: &str = "rm"; // !rm <title|id> | Short form for remove_movie
 pub const SHOW_WATCH_LIST: &str = "watch_list"; // !watch_list <optional: order> | Shows the full watch list
 pub const SHOW_WATCH_LIST_SHORT: &str = "wl"; // !wl <optional: order> | Short form for watch_list
-pub const HELP: &str = "help"; // !help <optional: command> | Shows a list of available commands or help to one specific command
-pub const HELP_SHORT: &str = "h"; // !h <optional: command> | Short form for help
-pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
 pub const MOVIE_LIMIT: &str = "movie_limit"; // !movie_limit <optional: number> | Sets the maximum amount of movies each user can add
 pub const MOVIE_LIMIT_SHORT: &str = "ml"; // !ml <optional: number> | Short form for movie_limit
 pub const SHOW_HISTORY: &str = "history"; // !history <optional: order> | Shows a list of all movies that have been watched already or that have the status 'removed'

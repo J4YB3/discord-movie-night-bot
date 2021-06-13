@@ -468,3 +468,18 @@ pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
         .color(crate::COLOR_INFORMATION)
     );
 }
+
+/**
+ * Sends the version message
+ */
+pub fn version(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::version failed.").channel_id, 
+        "",
+        |embed| embed
+        .fields(|builder| builder
+            .field("Aktuelle Version", crate::VERSION, false)
+        )
+        .color(crate::COLOR_BOT)
+    );
+}
