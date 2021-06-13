@@ -66,7 +66,7 @@ fn main() {
         next_movie_id: 0,
         server_id: ServerId(0),
         server_roles: vec![],
-        custom_prefix: '!',
+        custom_prefix: '.',
         tmdb: tmdb,
         wait_for_reaction: vec![],
         votes: votes,

@@ -86,7 +86,8 @@ pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<St
     let creator = if is_movie_vote { bot_data.bot_user.clone() } else { message.author.clone() };
 
     if user_already_owns_a_vote(bot_data, creator.id) {
-        // TODO: Send the random movie vote if it already exists
+        // The case, that a random_movie_vote already exists, is covered by the create_random_movie_vote function
+
         send_message::user_already_owns_a_vote_error(bot_data);
         return;
     } else {
@@ -627,6 +628,15 @@ pub fn show_movie_vote_limit(bot_data: &crate::BotData) {
  * The movies which are longest on the list have a greater chance of getting selected
  */
 pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: Option<u32>) {
+    if user_already_owns_a_vote(bot_data, bot_data.bot_user.id) {
+        if optional_limit.is_some() {
+            send_message::there_is_already_a_random_movie_vote_information(bot_data);
+        }
+        
+        send_random_movie_vote_again(bot_data);
+        return;
+    }
+
     use rand::{seq::IteratorRandom, thread_rng, Rng};
     use crate::movie_behaviour;
 
@@ -695,5 +705,32 @@ fn get_movie_limit_or_optional_limit_as_usize(bot_data: &crate::BotData, optiona
         return None;
     } else {
         return Some(limit.unwrap());
+    }
+}
+
+/**
+ * Finds the random movie vote in the votes and sends the vote message again
+ * If there is no random movie vote, sends an error message that there is no
+ * random_movie_vote
+ */
+fn send_random_movie_vote_again(bot_data: &mut crate::BotData) {
+    let bot_user_id = bot_data.bot_user.id;
+
+    // Find the random movie vote in the votes
+    if let Some(random_movie_vote) = bot_data.votes.iter_mut()
+        .find(|(_, vote)| vote.creator.id == bot_user_id) 
+    {
+        let mut the_vote = random_movie_vote.1.clone();
+        
+        // Send the vote details message and assign it to the bot_data
+        // If the sending was successful, add the vote to the waiting_for_reaction list
+        if let Some(message_id) = send_vote_details_message(bot_data, &mut the_vote) {
+            bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::Vote(message_id))
+        } else {
+            send_message::vote_message_failed_to_send_error(bot_data);
+        }
+        
+    } else {
+        send_message::no_random_movie_vote_exists_error(bot_data);
     }
 }

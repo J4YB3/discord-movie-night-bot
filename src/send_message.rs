@@ -332,3 +332,32 @@ pub fn unknown_error_occured(bot_data: &crate::BotData, err_code: u32) {
         .color(crate::COLOR_ERROR)
     );
 }
+
+/**
+ * Sends an error message, that there is no random_movie_vote at the time
+ */
+pub fn no_random_movie_vote_exists_error(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::no_random_movie_vote_exists failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Es existiert aktuell keine Filmabstimmung")
+        .description("So wie es aussieht, gibt es aktuell keine Abstimmung über den nächsten Film. Du kannst aber gerne
+            eine neue erstellen.")
+        .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sends an information message, that there is already a random movie vote
+ */
+pub fn there_is_already_a_random_movie_vote_information(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::there_is_already_a_random_movie_vote_information failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Bestehende Filmabstimmung")
+        .description("Es gibt bereits eine bestehende Filmabstimmung. Hier ist sie.")
+        .color(crate::COLOR_INFORMATION)
+    );
+}

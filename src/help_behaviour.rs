@@ -513,7 +513,10 @@ pub fn show_help_random_movie_vote(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_random_movie_vote function failed.");
 
     let help_str =
-    "Erstellt eine neue Filmabstimmung mit zufälligen Filmen aus der Filmliste. Wenn eine positive Zahl als Parameter 
+    "Erstellt eine neue Filmabstimmung mit zufälligen Filmen aus der Filmliste. Wenn bereits eine Filmabstimmung existiert,
+    wird diese erneut in den Kanal gesendet.
+    
+    Wenn eine positive Zahl als Parameter 
     angegeben wird, werden so viele Filme wie angegeben zur Abstimmung ausgewählt. Ansonsten wird das gesetzte Limit
     benutzt.
     
