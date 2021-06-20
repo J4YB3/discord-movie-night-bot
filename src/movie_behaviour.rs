@@ -625,16 +625,10 @@ fn generate_id_sorted_watch_list_description(bot_data: &crate::BotData) -> Strin
 /**
  * Counts all movies from the list with watch list status and returns the count
  */
-fn count_watch_list_movies(bot_data: &crate::BotData) -> u32 {
-    let mut count: u32 = 0;
-
-    for (_, entry) in bot_data.watch_list.iter() {
-        if entry.status.is_watch_list_status() {
-            count += 1;
-        }
-    }
-
-    count
+fn count_watch_list_movies(bot_data: &crate::BotData) -> usize {
+    bot_data.watch_list.iter()
+        .filter(|(_, entry)| entry.status.is_watch_list_status())
+        .count()
 }
 
 /**
@@ -787,16 +781,10 @@ fn generate_random_sorted_history_description(bot_data: &crate::BotData) -> Stri
 /**
  * Counts all movies from the list with history status and returns the count
  */
-fn count_history_movies(bot_data: &crate::BotData) -> u32 {
-    let mut count: u32 = 0;
-
-    for (_, entry) in bot_data.watch_list.iter() {
-        if entry.status.is_history_status() {
-            count += 1;
-        }
-    }
-
-    count
+fn count_history_movies(bot_data: &crate::BotData) -> usize {
+    bot_data.watch_list.iter()
+        .filter(|(_, entry)| entry.status.is_history_status())
+        .count()
 }
 
 /** 
