@@ -519,14 +519,14 @@ pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
     let message = bot_data.message.as_ref().expect("Passing message to show_watch_list function failed.");
 
     let mut watch_list_string: String = String::new();
-    let history_count = count_watch_list_movies(bot_data);
-    if history_count == 1 {
-        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n", history_count).as_str();
+    let watch_list_count = count_watch_list_movies(bot_data);
+    if watch_list_count == 1 {
+        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n", watch_list_count).as_str();
     } else {
-        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n", history_count).as_str();
+        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n", watch_list_count).as_str();
     }
 
-    if history_count > 0 {
+    if watch_list_count > 0 {
         // If the ordering by user is demanded
         if order == "user" {
             watch_list_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
