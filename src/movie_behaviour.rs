@@ -345,7 +345,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                 user_id: message.author.id,
             };
 
-            let bot_response = send_message::movie_information(bot_data, &new_entry, true, add_movie);
+            let bot_response = send_message::movie_information(bot_data, &new_entry, true, add_movie, false);
 
             if add_movie {
                 if let Ok(res_message) = bot_response {
@@ -909,7 +909,7 @@ pub fn set_status_watched(bot_data: &mut crate::BotData, id: u32, date: String) 
  */
 pub fn show_movie_by_id(bot_data: &crate::BotData, id: u32) {
     if let Some(entry) = bot_data.watch_list.get(&id) {
-        let _ = send_message::movie_information(bot_data, entry, false, false);
+        let _ = send_message::movie_information(bot_data, entry, false, false, false);
     } else {
         send_message::movie_id_not_found_error(bot_data, &id);
     }

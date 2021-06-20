@@ -63,7 +63,7 @@ pub fn user_has_too_many_movies_error(bot_data: &crate::BotData) {
 /**
  * Takes a movie entry and sends an embedded message with all information of the movie
  */
-pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviour::WatchListEntry, new_movie: bool, ask_confirmation: bool) -> Result<discord::model::Message, discord::Error> {
+pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviour::WatchListEntry, new_movie: bool, ask_confirmation: bool, ask_set_watched: bool) -> Result<discord::model::Message, discord::Error> {
     let message = bot_data.message.as_ref().expect("Passing message to send_movie_information_message function failed.");
 
     if new_movie {
@@ -119,6 +119,17 @@ pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviou
                 .field("Hinzugefügt am", general_behaviour::timestamp_to_string(&movie_entry.added_timestamp, true).as_str(), true)
                 .field("Status", format!("{}", movie_entry.status.get_emoji()).as_str(), true)
                 .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
+            )
+            .footer(|footer| footer.text(
+                    format!("{}", 
+                        if ask_set_watched {
+                            "Soll der Film direkt als 'Watched' Status gesetzt werden?"
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str()
+                )
             )
             .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
         )

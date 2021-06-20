@@ -807,13 +807,21 @@ fn send_random_movie_vote_summary_message(bot_data: &mut crate::BotData, vote: &
             // If the id was found, try to retreive the entry
             if let Some(movie_entry) = bot_data.watch_list.get(&watch_list_id_of_winner) {
                 // If this also worked, send the message
-                if let Ok(message) = send_message::movie_information(bot_data, movie_entry, false, false) {
-                    // If the message could be sent, generate the watch link and send it
-                    send_message::watch_link(
-                        bot_data, 
-                        &movie_vote_winner.cargo,
-                        true
+                if let Ok(message) = send_message::movie_information(bot_data, movie_entry, false, false, true) {
+                    // If the message could be sent, add the reactions to the bot_data
+                    let _ = bot_data.bot.add_reaction(
+                        message.channel_id,
+                        message.id,
+                        discord::model::ReactionEmoji::Unicode(String::from("✅"))
                     );
+        
+                    let _ = bot_data.bot.add_reaction(
+                        message.channel_id,
+                        message.id,
+                        discord::model::ReactionEmoji::Unicode(String::from("❎"))
+                    );
+            
+                    bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie_entry.movie.clone()));
 
                     // Now return the message id
                     return Some(message.id);
