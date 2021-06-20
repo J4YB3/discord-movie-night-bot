@@ -533,11 +533,11 @@ pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
 
             watch_list_string += generate_user_sorted_watch_list_description(bot_data).as_str();
         } 
-        // If the ordering should be random
+        // If the ordering should be by id random
         else {
-            watch_list_string += format!("Die Filme werden in zufälliger Reihenfolge angezeigt.\n\n").as_str();
+            watch_list_string += format!("Die Filme werden geordnet nach ID angezeigt.\n\n").as_str();
 
-            watch_list_string += generate_random_sorted_watch_list_description(bot_data).as_str();
+            watch_list_string += generate_id_sorted_watch_list_description(bot_data).as_str();
         }
     }
     
@@ -602,11 +602,11 @@ fn generate_user_sorted_watch_list_description(bot_data: &crate::BotData) -> Str
 /**
  * Generates the description text for the randomly sorted watch list
  */
-fn generate_random_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
+fn generate_id_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
     let mut watch_list_string = String::new();
 
     // For every movie entry
-    for (id, entry) in bot_data.watch_list.iter() {
+    for (id, entry) in bot_data.watch_list.iter().sorted() {
         if entry.status.is_watch_list_status() {
             watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
                 entry.status.get_emoji(), 
