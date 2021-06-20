@@ -209,12 +209,25 @@ fn get_genres_formatted(genres: &Vec<tmdb::model::Genre>) -> String {
  * Searches a movie on TMDb and displays its information. 
  */
 pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movie: bool) {
+    // Block the add_movie command if another movie gets added already
+    if add_movie && bot_data.wait_for_reaction.iter()
+        .filter(|x| match x {
+            crate::general_behaviour::WaitingForReaction::AddMovie(_, _) => true, 
+            _ => false
+        })
+        .count() > 0 
+    {
+        send_message::another_user_is_adding_a_movie_information(bot_data);
+        return;
+    }
+
     let message = bot_data.message.as_ref().expect("Passing message to search_movie function failed");
 
     enum SearchResult {
         Movie(tmdb::model::Movie),
-        TryIMDBLink,
-        Error
+        Error(String),
+        NoResults,
+        FaultyIMDBLink,
     }
 
     // Initiate the search
@@ -227,7 +240,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             .unwrap();
 
             if result.movie_results.len() <= 0 {
-                SearchResult::Error
+                SearchResult::NoResults
             } else {
                 SearchResult::Movie(
                     bot_data.tmdb
@@ -238,106 +251,156 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                 )
             }
         } else {
-            SearchResult::Error
+            SearchResult::FaultyIMDBLink
         }
     } else {
+        let title = title_or_link;
         let result = bot_data.tmdb
-        .search()
-        .title(title_or_link)
-        .execute();
+            .search()
+            .title(title)
+            .execute();
         
-        if let Ok(result) = result {
-            if result.total_results <= 0 {
-                SearchResult::Error
-            } else {
-                let fetch_result = result.results[0].fetch(&bot_data.tmdb);
-
-                if let Ok(result) = fetch_result {
-                    SearchResult::Movie(result)
+        match result {
+            Ok(result) => {
+                if result.total_results <= 0 {
+                    SearchResult::NoResults
                 } else {
-                    SearchResult::TryIMDBLink
+                    use std::cmp::Ordering::Equal;
+                    let lowercase_title = title.to_lowercase();
+                    let exact_match_option = result.results.iter()
+                        .filter(|x| x.title.to_lowercase() == lowercase_title 
+                            || x.original_title.to_lowercase() == lowercase_title)
+                        .max_by(|x, y| x.popularity.partial_cmp(&y.popularity)
+                            .unwrap_or(Equal)
+                        );
+                    
+                    if let Some(exact_match) = exact_match_option {
+                        let fetch_result = exact_match.fetch(&bot_data.tmdb);
+    
+                        match fetch_result {
+                            Ok(result) => SearchResult::Movie(result),
+                            Err(error) => SearchResult::Error(format!("{}", error))
+                        }
+                    } else {
+                        let most_popular_movie_option = result.results.iter()
+                        .max_by(|x, y| x.popularity.partial_cmp(&y.popularity)
+                            .unwrap_or(Equal)
+                        );
+                        
+                        if let Some(popular_movie) = most_popular_movie_option {
+                            let fetch_result = popular_movie.fetch(&bot_data.tmdb);
+        
+                            match fetch_result {
+                                Ok(result) => SearchResult::Movie(result),
+                                Err(error) => SearchResult::Error(format!("{}", error))
+                            }
+                        } else {
+                            SearchResult::NoResults
+                        }
+                    }
                 }
+            },
+            Err(error) => {
+                SearchResult::Error(format!("{}", error))
             }
-        } else {
-            SearchResult::TryIMDBLink
         }
     };
-    
-    if let SearchResult::Movie(first_movie) = movie {
-        // If the user wants to add this movie, check if it is already in the watch list
-        if add_movie {
-            if let Some(id) = find_id_by_tmdb_id(first_movie.id, &bot_data.watch_list) {
-                // The movie that was just found is already in the watch list, so send a message
-                // Also return from the function, because no new movie should be added in that case
-                return send_message::movie_already_exists(bot_data, *id, first_movie.id);
-            } else {
-                // Check if the user has already added up to the maximum limit of movies
-                if user_has_too_many_movies(bot_data, message.author.id) {
-                    // If that is the case, return because the movie should not be added
-                    return send_message::user_has_too_many_movies_error(bot_data);
+
+    match movie {
+        SearchResult::Movie(first_movie) => {
+            // If the user wants to add this movie, check if it is already in the watch list
+            if add_movie {
+                if let Some(id) = find_id_by_tmdb_id(first_movie.id, &bot_data.watch_list) {
+                    // The movie that was just found is already in the watch list, so send a message
+                    // Also return from the function, because no new movie should be added in that case
+                    return send_message::movie_already_exists(bot_data, *id, first_movie.id);
+                } else {
+                    // Check if the user has already added up to the maximum limit of movies
+                    if user_has_too_many_movies(bot_data, message.author.id) {
+                        // If that is the case, return because the movie should not be added
+                        return send_message::user_has_too_many_movies_error(bot_data);
+                    }
                 }
             }
-        }
 
-        let new_movie = Movie {
-            movie_title: first_movie.title.clone(),
-            original_title: first_movie.original_title.clone(),
-            original_language: first_movie.original_language.clone().to_uppercase(),
-            overview: shorten_movie_description(first_movie.overview.clone().unwrap_or("Keine Beschreibung verfügbar.".to_string())),
-            poster_path: first_movie.poster_path.clone(),
-            tmdb_id: first_movie.id,
-            genres: get_genres_formatted(&first_movie.genres),
-            runtime: first_movie.runtime,
-            budget: format_budget(first_movie.budget),
-            release_date: parse_tmdb_release_date(first_movie.release_date.clone()).unwrap_or(message.timestamp),
-        };
+            let new_movie = Movie {
+                movie_title: first_movie.title.clone(),
+                original_title: first_movie.original_title.clone(),
+                original_language: first_movie.original_language.clone().to_uppercase(),
+                overview: shorten_movie_description(first_movie.overview.clone().unwrap_or("Keine Beschreibung verfügbar.".to_string())),
+                poster_path: first_movie.poster_path.clone(),
+                tmdb_id: first_movie.id,
+                genres: get_genres_formatted(&first_movie.genres),
+                runtime: first_movie.runtime,
+                budget: format_budget(first_movie.budget),
+                release_date: parse_tmdb_release_date(first_movie.release_date.clone()).unwrap_or(message.timestamp),
+            };
 
-        let new_entry = WatchListEntry {
-            movie: new_movie,
-            user: message.author.name.clone(),
-            added_timestamp: message.timestamp,
-            watched_or_removed_timestamp: None,
-            status: MovieStatus::NotWatched,
-            user_id: message.author.id,
-        };
+            let new_entry = WatchListEntry {
+                movie: new_movie,
+                user: message.author.name.clone(),
+                added_timestamp: message.timestamp,
+                watched_or_removed_timestamp: None,
+                status: MovieStatus::NotWatched,
+                user_id: message.author.id,
+            };
 
-        let bot_response = send_message::movie_information(bot_data, &new_entry, true, add_movie);
+            let bot_response = send_message::movie_information(bot_data, &new_entry, true, add_movie);
 
-        if add_movie {
-            if let Ok(res_message) = bot_response {
-                // Add the waiting for reaction enum entry to bot_data
-                bot_data.wait_for_reaction.push(WaitingForReaction::AddMovie(res_message.id, new_entry));
+            if add_movie {
+                if let Ok(res_message) = bot_response {
+                    // Add the waiting for reaction enum entry to bot_data
+                    bot_data.wait_for_reaction.push(WaitingForReaction::AddMovie(res_message.id, new_entry));
 
-                // Add ✅ as reaction
-                let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("✅".to_string()));
-                // Add ❎ as reaction
-                let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("❎".to_string()));
+                    // Add ✅ as reaction
+                    let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("✅".to_string()));
+                    // Add ❎ as reaction
+                    let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("❎".to_string()));
+                }
             }
+        },
+        SearchResult::NoResults => {
+            let _ = bot_data.bot.send_embed(
+                message.channel_id,
+                "",
+                |embed| embed
+                .title("Keine Filme gefunden")
+                .description(
+                    format!("Leider konnten keine Filme zu dieser Anfrage gefunden werden")
+                    .as_str()
+                )
+                .color(COLOR_ERROR)
+            );
+        },
+        SearchResult::FaultyIMDBLink => {
+            let _ = bot_data.bot.send_embed(
+                message.channel_id,
+                "",
+                |embed| embed
+                .title("Link fehlerhaft")
+                .description(
+                    format!("Es sieht so aus als ob der angegebene Link fehlerhaft war. Bitte versichere dich, dass der Link eine korrekte IMDb-ID enthält.")
+                    .as_str()
+                )
+                .color(COLOR_ERROR)
+            );
+        },
+        SearchResult::Error(formatted_error_string) => {
+            let _ = bot_data.bot.send_embed(
+                message.channel_id,
+                "",
+                |embed| embed
+                .title("Fehler bei der Suche")
+                .description(
+                    format!("Leider ist bei der TMDb-Suche ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir zur Verfügung stellen:
+                    ```{}```
+                    Am besten versuchst du es noch einmal mit einem Link.", 
+                    formatted_error_string)
+                    .as_str()
+                )
+                .color(COLOR_ERROR)
+            );
         }
-    } else if let SearchResult::TryIMDBLink = movie {
-        let _ = bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title("Fehler bei der TMDb Suche")
-            .description(
-                format!("Leider ist bei der TMDb Suche ein Fehler aufgetreten. Bitte versuche es erneut mit einem IMDb Link :kissing_heart:")
-                .as_str()
-            )
-            .color(COLOR_ERROR)
-        );
-    } else {
-        let _ = bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title("Keine Filme gefunden")
-            .description(
-                format!("Leider konnten keine Filme mit diesem Titel gefunden werden, oder der angegebene Link war fehlerhaft :cry:")
-                .as_str()
-            )
-            .color(COLOR_ERROR)
-        );
     }
 }
 

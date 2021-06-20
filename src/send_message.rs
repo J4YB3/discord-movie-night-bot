@@ -87,6 +87,7 @@ pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviou
                 .field("Genres", movie_entry.movie.genres.as_str(), true)
                 .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
                 .field("Budget", movie_entry.movie.budget.as_str(), true)
+                .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
             )
             .footer(|footer| footer
                 .text(format!("{}", if ask_confirmation {"Meintest du diesen Film?"} else {""}).as_str())
@@ -117,6 +118,7 @@ pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviou
                 .field("Hinzugefügt von", format!("<@{}>", movie_entry.user_id).as_str(), true)
                 .field("Hinzugefügt am", general_behaviour::timestamp_to_string(&movie_entry.added_timestamp, true).as_str(), true)
                 .field("Status", format!("{}", movie_entry.status.get_emoji()).as_str(), true)
+                .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
             )
             .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
         )
@@ -482,5 +484,20 @@ pub fn info(bot_data: &crate::BotData) {
             .field("Aktuelle Version", crate::VERSION, false)
         )
         .color(crate::COLOR_BOT)
+    );
+}
+
+/**
+ * Sends an information message, that another user is currently adding a movie and the user
+ * should wait for the other user to finish, and try it later.
+ */
+pub fn another_user_is_adding_a_movie_information(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::another_user_is_adding_a_movie_information failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Anderer Nutzer fügt gerade einen Film hinzu")
+        .description("Ein anderer Nutzer ist gerade dabei einen Film hinzuzufügen. Bitte warte mit deiner Anfrage bis der Nutzer den Vorgang abgeschlossen hat und versuche es dann erneut.")
+        .color(crate::COLOR_INFORMATION)
     );
 }
