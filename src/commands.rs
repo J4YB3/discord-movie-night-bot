@@ -135,7 +135,7 @@ impl FromStr for Command {
                     argument = arguments[0].to_lowercase();
                 }
 
-                if argument != "random" && argument != "user" && argument != "" {
+                if argument != "id" && argument != "user" && argument != "" {
                     return Err(ParseCommandError::WrongArgumentForWatchList);
                 }
 

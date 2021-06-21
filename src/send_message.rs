@@ -332,6 +332,21 @@ pub fn emoji_not_part_of_vote_info(bot_data: &mut crate::BotData) {
 }
 
 /**
+ * Sends an information message, that the given emoji reaction was not
+ * part of the expected reactions for the message
+ */
+pub fn emoji_not_recognized_as_reaction_info(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::emoji_not_recognized_as_reaction_info failed.").channel_id, 
+        "",
+        |embed| embed
+        .title("Emoji nicht erwartet")
+        .description("Dieses Emoji wurde nicht als Teil der erwarteten Emojis erkannt. Bitte reagiere nur mit den vorgegebenen Emojis auf meine Nachrichten.")
+        .color(crate::COLOR_INFORMATION)
+    );
+}
+
+/**
  * Sends an error message, that an unknown error occured
  */
 pub fn unknown_error_occured(bot_data: &crate::BotData, err_code: u32) {
@@ -402,71 +417,58 @@ pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotDa
     );
 }
 
+// TODO: Decide if function is needed
 /**
  * Sends the watch link as embedded message for the given tmdb_id and movie_title
  */
-pub fn watch_link(bot_data: &mut crate::BotData, movie: &crate::movie_behaviour::Movie, ask_add_movie_to_watched: bool) {
-    use crate::movie_behaviour::get_movie_link;
+// pub fn watch_link(bot_data: &mut crate::BotData, movie: &crate::movie_behaviour::Movie, ask_add_movie_to_watched: bool) {
+//     use crate::movie_behaviour::get_movie_link;
 
-    let movie_watch_link = get_movie_link(movie.tmdb_id, true);
+//     let movie_watch_link = get_movie_link(movie.tmdb_id, true);
 
-    if let Ok(message) = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
-        "",
-        |embed| embed
-        .title("Watch-Link")
-        .description(format!("Hier ist der Watch-Link für den Film *{}*
+//     if let Ok(message) = bot_data.bot.send_embed(
+//         bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
+//         "",
+//         |embed| embed
+//         .title("Watch-Link")
+//         .description(format!("Hier ist der Watch-Link für den Film *{}*
         
-            {}", movie.movie_title, movie_watch_link)
-            .as_str()
-        )
-        .footer(|footer| footer
-            .text(
-                format!("{}", 
-                    if ask_add_movie_to_watched {
-                        "Soll der Film direkt als 'Watched' Status gesetzt werden?"
-                    } else {
-                        ""
-                    }
-                )
-                .as_str()
-            )
-        )
-        .color(crate::COLOR_INFORMATION)
-    ) {
-        if ask_add_movie_to_watched {
-            let _ = bot_data.bot.add_reaction(
-                message.channel_id,
-                message.id,
-                discord::model::ReactionEmoji::Unicode(String::from("✅"))
-            );
+//             {}", movie.movie_title, movie_watch_link)
+//             .as_str()
+//         )
+//         .footer(|footer| footer
+//             .text(
+//                 format!("{}", 
+//                     if ask_add_movie_to_watched {
+//                         "Soll der Film direkt als 'Watched' Status gesetzt werden?"
+//                     } else {
+//                         ""
+//                     }
+//                 )
+//                 .as_str()
+//             )
+//         )
+//         .color(crate::COLOR_INFORMATION)
+//     ) {
+//         if ask_add_movie_to_watched {
+//             let _ = bot_data.bot.add_reaction(
+//                 message.channel_id,
+//                 message.id,
+//                 discord::model::ReactionEmoji::Unicode(String::from("✅"))
+//             );
 
-            let _ = bot_data.bot.add_reaction(
-                message.channel_id,
-                message.id,
-                discord::model::ReactionEmoji::Unicode(String::from("❎"))
-            );
+//             let _ = bot_data.bot.add_reaction(
+//                 message.channel_id,
+//                 message.id,
+//                 discord::model::ReactionEmoji::Unicode(String::from("❎"))
+//             );
     
-            bot_data.wait_for_reaction.push(general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie.clone()));
-        }
-    } else {
-        self::message_failed_to_send_error(bot_data);
-    }
-}
-
-/**
- * Sends the error message, that a message tried to send, but failed
- */
-pub fn message_failed_to_send_error(bot_data: &crate::BotData) {
-    let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::message_failed_to_send_error failed.").channel_id, 
-        "",
-        |embed| embed
-        .title("Senden fehlgeschlagen")
-        .description("Wie es scheint, konnte eine Nachricht von mir leider nicht korrekt versendet werden. Tur mir Leid.")
-        .color(crate::COLOR_ERROR)
-    );
-}
+//             bot_data.wait_for_reaction.push(general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie.clone()));
+//         }
+//     } else {
+//         self::message_failed_to_send_error(bot_data);
+//     }
+// }
 
 /**
  * Sends an information message, that the movie was not added to the watched status
@@ -487,7 +489,7 @@ pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
  */
 pub fn info(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::version failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::info failed.").channel_id, 
         "",
         |embed| embed
         .fields(|builder| builder

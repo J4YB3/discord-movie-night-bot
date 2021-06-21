@@ -33,7 +33,8 @@ const COLOR_WARNING: u64 = 0xf5d442; // yellow
 const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
-const VERSION: &str = "0.4.6";
+const MAX_ENTRIES_PER_PAGE: usize = 10;
+const VERSION: &str = "0.4.0";
 
 fn main() {
     let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
@@ -182,6 +183,28 @@ fn main() {
                                     break;
                                 }
                             },
+                            WaitingForReaction::WatchListPagination(message_id, sorted_watch_list_enum, curr_page) => {
+                                if reaction.message_id == message_id {
+                                    movie_behaviour::handle_watch_list_message_pagination_reaction(
+                                        &mut bot_data,
+                                        message_id, 
+                                        sorted_watch_list_enum, 
+                                        curr_page, 
+                                        &reaction
+                                    );
+                                }
+                            },
+                            WaitingForReaction::HistoryPagination(message_id, sorted_history_enum, curr_page) => {
+                                if reaction.message_id == message_id {
+                                    movie_behaviour::handle_watch_list_message_pagination_reaction(
+                                        &mut bot_data,
+                                        message_id, 
+                                        sorted_history_enum, 
+                                        curr_page, 
+                                        &reaction
+                                    );
+                                }
+                            }
                         }
                     }
                 }

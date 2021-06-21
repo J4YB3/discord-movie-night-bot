@@ -6,6 +6,8 @@ pub enum WaitingForReaction {
     AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
     Vote(discord::model::MessageId),
     AddMovieToWatched(discord::model::MessageId, crate::movie_behaviour::Movie),
+    WatchListPagination(discord::model::MessageId, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
+    HistoryPagination(discord::model::MessageId, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
 }
 
 /**

@@ -13,6 +13,7 @@ pub fn show_help(bot_data: &crate::BotData) {
 
     **Allgemein**
     `help`
+    `info`
     `prefix`
     `quit`
     
@@ -156,7 +157,7 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
 
     let help_str =
     "Zeigt die Filmliste an.
-    Mit dem Sortierparameter `random` wird die Liste in beliebiger Reihenfolge angezeigt.
+    Mit dem Sortierparameter `id` wird die Liste nach ID sortiert.
     Mit dem Sortierparameter `user` wird die Liste nach Nutzer sortiert, anschließend nach ID.
     Wird der Parameter weggelassen wird die Liste in beliebiger Reihenfolge angezeigt.
     
@@ -166,7 +167,7 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
     **Beispiel**
     !watch_list
     !watch_list user
-    !watch_list random
+    !watch_list id
     
     **Aliase**
     `watch_list`, `wl`";

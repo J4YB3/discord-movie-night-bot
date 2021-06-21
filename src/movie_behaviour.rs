@@ -140,6 +140,21 @@ impl PartialEq for Movie {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum SortedMovieList {
+    WatchListUserSorted(/*total_pages*/ usize, Vec<UserSortedMovieListVectorEntry>),
+    WatchListIdSorted(/*total_pages*/ usize, Vec<(u32, WatchListEntry)>),
+    HistoryUserSorted(/*total_pages*/ usize, Vec<UserSortedMovieListVectorEntry>),
+    HistoryDateSorted(/*total_pages*/ usize, Vec<(u32, WatchListEntry)>),
+}
+
+#[derive(Clone, Debug)]
+pub struct UserSortedMovieListVectorEntry {
+    user_name: String,
+    number_of_pages_required: usize,
+    entries: Vec<(u32, WatchListEntry)>,
+}
+
 /**
  * Appends the poster path returned by tmdb search to the default tmdb poster directory
  */
@@ -515,37 +530,110 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
 /**
  * Formats the watch list hash map and sends it as an embedded message
  */
-pub fn show_watch_list(bot_data: &crate::BotData, order: String) {
+pub fn show_watch_list(bot_data: &mut crate::BotData, order: String) {
     let message = bot_data.message.as_ref().expect("Passing message to show_watch_list function failed.");
+
+    // First check if there was already a watch list waiting for reactions
+    if let Some((idx, message_id)) = bot_data.wait_for_reaction.iter().enumerate()
+        .find_map(|(idx, x)| if let crate::general_behaviour::WaitingForReaction::WatchListPagination(message_id, _, _) = x {
+            Some((idx, message_id))
+        } else {
+            None
+        })
+    {
+        // If there was, delete the reactions of the bot on that message and remove it from the
+        // wait_for_reaction vector
+        let _ = bot_data.bot.delete_reaction(
+            message.channel_id,
+            *message_id,
+            None,
+            discord::model::ReactionEmoji::Unicode("⬅️".to_string())
+        );
+
+        let _ = bot_data.bot.delete_reaction(
+            message.channel_id,
+            *message_id,
+            None,
+            discord::model::ReactionEmoji::Unicode("➡️".to_string())
+        );
+
+        bot_data.wait_for_reaction.remove(idx);
+    }
 
     let mut watch_list_string: String = String::new();
     let watch_list_count = count_watch_list_movies(bot_data);
-    if watch_list_count == 1 {
-        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n", watch_list_count).as_str();
-    } else {
-        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n", watch_list_count).as_str();
-    }
+    let total_pages: usize;
+    let sorted_watch_list_enum_option: Option<SortedMovieList>;
 
     if watch_list_count > 0 {
         // If the ordering by user is demanded
         if order == "user" {
-            watch_list_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
+            let user_sorted_watch_list = create_user_sorted_watch_list_vector(bot_data);
+            total_pages = user_sorted_watch_list.iter().map(|x| x.number_of_pages_required).sum();
+            
+            watch_list_string += generate_user_sorted_watch_list_page_string(&user_sorted_watch_list, 1).as_str();
 
-            watch_list_string += generate_user_sorted_watch_list_description(bot_data).as_str();
+            sorted_watch_list_enum_option = Some(SortedMovieList::WatchListUserSorted(total_pages, user_sorted_watch_list));
         } 
-        // If the ordering should be by id random
+        // If the ordering should be by id
         else {
-            watch_list_string += format!("Die Filme werden geordnet nach ID angezeigt.\n\n").as_str();
+            let id_sorted_watch_list: Vec<(u32, WatchListEntry)> = bot_data.watch_list.iter().sorted()
+                .filter_map(|(id, entry)| if entry.status.is_watch_list_status() {
+                    Some((*id, entry.clone()))
+                } else {
+                    None
+                })
+                .collect();
+            total_pages = (id_sorted_watch_list.len() as f64 / crate::MAX_ENTRIES_PER_PAGE as f64).ceil() as usize;
 
-            watch_list_string += generate_id_sorted_watch_list_description(bot_data).as_str();
+            watch_list_string += generate_id_sorted_watch_list_page_string(&id_sorted_watch_list, 1).as_str();
+
+            sorted_watch_list_enum_option = Some(SortedMovieList::WatchListIdSorted(total_pages, id_sorted_watch_list));
         }
+    } else {
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed
+                .title("Filmliste")
+                .description("Es sind zur Zeit **0** Filme auf der Liste")
+                .color(COLOR_BOT)
+        );
+        return;
     }
+
+    // We know, that this can't be none now, so unwrap the value
+    let sorted_watch_list_enum = sorted_watch_list_enum_option.unwrap();
     
-    let _ = bot_data.bot.send_embed(
+    if let Ok(message) = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("Filmliste").description(watch_list_string.as_str()).color(COLOR_BOT)
-    );
+        |embed| embed
+            .title("Filmliste")
+            .description(watch_list_string.as_str())
+            .color(COLOR_BOT)
+            .footer(|footer| footer.text(format!("Seite {}/{}", 1, total_pages).as_str()))
+    ) {
+        let _ = bot_data.bot.add_reaction(
+            message.channel_id,
+            message.id,
+            discord::model::ReactionEmoji::Unicode("⬅️".to_string())
+        );
+
+        let _ = bot_data.bot.add_reaction(
+            message.channel_id,
+            message.id,
+            discord::model::ReactionEmoji::Unicode("➡️".to_string())
+        );
+
+        bot_data.wait_for_reaction.push(
+            crate::general_behaviour::WaitingForReaction::WatchListPagination(
+                message.id, 
+                sorted_watch_list_enum,
+                1
+            )
+        );
+    }
 }
 
 /**
@@ -572,52 +660,271 @@ fn create_user_sorted_watch_list(bot_data: &crate::BotData) -> HashMap<&String, 
 }
 
 /**
+ * Returns a watch list vector that is sorted by users and contains all information needed for paginating the entries
+ */
+fn create_user_sorted_watch_list_vector(bot_data: &crate::BotData) -> Vec<UserSortedMovieListVectorEntry> {
+    let user_sorted_watch_list_hash_map = create_user_sorted_watch_list(bot_data);
+    let get_number_pages_as_usize = |entries_len: usize| -> usize {
+        (entries_len as f64 / crate::MAX_ENTRIES_PER_PAGE as f64).ceil() as usize
+    };
+
+    user_sorted_watch_list_hash_map.iter()
+        .map(|(name, entries)| UserSortedMovieListVectorEntry {
+            user_name: (*name).clone(),
+            number_of_pages_required: get_number_pages_as_usize(entries.len()),
+            entries: entries.iter().map(|(id, value)| (*id, (*value).clone())).collect(),
+        })
+        .collect()
+}
+
+/**
  * Generates the description text for the watch list sorted by user
  */
-fn generate_user_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
-    let user_movies = create_user_sorted_watch_list(bot_data);
+fn generate_user_sorted_watch_list_page_string(
+    watch_list_vector: &Vec<UserSortedMovieListVectorEntry>,
+    page_to_show: usize
+) -> String {
     let mut watch_list_string = String::new();
-
-    // For every user
-    for (user, entry_vector) in user_movies.iter().sorted() {
-        watch_list_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
-        
-        // For every movie entry
-        for (id, entry) in entry_vector {
-            watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt am {}\n\n", 
-                entry.status.get_emoji(), 
-                entry.movie.movie_title, 
-                get_movie_link(entry.movie.tmdb_id, false), 
-                id.to_string(), 
-                timestamp_to_string(&entry.added_timestamp, false)
-            ).as_str();
-        }
-
-        watch_list_string += "\n";
+    
+    let watch_list_count: usize = watch_list_vector.iter().map(|x| x.entries.len()).sum();
+    if watch_list_count == 1 {
+        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n\n", watch_list_count).as_str();
+    } else {
+        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n\n", watch_list_count).as_str();
     }
+
+    if watch_list_count == 0 {
+        return watch_list_string;
+    }
+
+    watch_list_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
+
+    let mut accumulated_pages: usize = 0;
+    let mut entry_to_show: Option<UserSortedMovieListVectorEntry> = None;
+
+    // Find the entry in the vector that contains the page to show
+    for entry in watch_list_vector {
+        accumulated_pages += entry.number_of_pages_required;
+
+        if page_to_show <= accumulated_pages {
+            entry_to_show = Some(entry.clone());
+            break;
+        }
+    }
+
+    if entry_to_show.is_none() {
+        return format!("Die Seite mit der Nummer {} gibt es in dieser Liste nicht.", accumulated_pages);
+    }
+
+    // We now know that entry_to_show is a some value, so unwrap it
+    let entry_to_show = entry_to_show.unwrap();
+
+    // Calculate the first index inside the entry vector that will be displayed on the page
+    let first_index_to_show = ((page_to_show - 1) - (accumulated_pages - entry_to_show.number_of_pages_required)) * crate::MAX_ENTRIES_PER_PAGE;
+
+    watch_list_string += format!("Hinzugefügt von **{}**\n\n", entry_to_show.user_name).as_str();
+
+    // Now iterate over the entry vector
+    entry_to_show.entries.iter()
+        // Returns the entries with an index
+        .enumerate()
+        // Get only those elements that should be shown on that page
+        .filter(|(idx, _)| *idx >= first_index_to_show && *idx < first_index_to_show + crate::MAX_ENTRIES_PER_PAGE)
+        // For each of those append the string to the watch list
+        .for_each(
+            |(_, entry)| {
+                watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt am {}\n\n", 
+                        entry.1.status.get_emoji(), 
+                        entry.1.movie.movie_title, 
+                        get_movie_link(entry.1.movie.tmdb_id, false), 
+                        entry.0.to_string(), 
+                        timestamp_to_string(&entry.1.added_timestamp, false)
+                    )
+                    .as_str()
+            }
+        );
 
     watch_list_string
 }
 
 /**
- * Generates the description text for the randomly sorted watch list
+ * Deletes the users reaction and updates the watch list message.
  */
-fn generate_id_sorted_watch_list_description(bot_data: &crate::BotData) -> String {
-    let mut watch_list_string = String::new();
+pub fn handle_watch_list_message_pagination_reaction(
+    bot_data: &mut crate::BotData,
+    message_id: discord::model::MessageId, 
+    sorted_movie_list: SortedMovieList, 
+    previous_page: usize,
+    reaction: &discord::model::Reaction
+) {
+    // delete the users reaction
+    let _ = bot_data.bot.delete_reaction(
+        reaction.channel_id,
+        message_id,
+        Some(reaction.user_id),
+        reaction.emoji.clone()
+    );
 
-    // For every movie entry
-    for (id, entry) in bot_data.watch_list.iter().sorted() {
-        if entry.status.is_watch_list_status() {
-            watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
-                entry.status.get_emoji(), 
-                entry.movie.movie_title, 
-                get_movie_link(entry.movie.tmdb_id, false), 
-                id.to_string(), 
-                entry.user, 
-                timestamp_to_string(&entry.added_timestamp, false)
-            ).as_str();
+    // Make sure the emoji we got is actually a unicode emoji
+    if let discord::model::ReactionEmoji::Unicode(emoji) = reaction.emoji.clone() {
+        let mut new_page: usize = 0;
+        let watch_list_string: String;
+
+        let total_pages = match sorted_movie_list {
+            SortedMovieList::WatchListUserSorted(total_pages, _) => total_pages,
+            SortedMovieList::WatchListIdSorted(total_pages, _) => total_pages,
+            SortedMovieList::HistoryUserSorted(total_pages, _) => total_pages,
+            SortedMovieList::HistoryDateSorted(total_pages, _) => total_pages,
+        };
+
+        // Check the emoji from the reaction and calculate the new page to show
+        if emoji == String::from("⬅️") {
+            if previous_page > 1 {
+                new_page = previous_page - 1;
+            }
+        } else if emoji == String::from("➡️") {
+            if previous_page < total_pages {
+                new_page = previous_page + 1;
+            }
+        } else {
+            send_message::emoji_not_recognized_as_reaction_info(bot_data);
+            return;
+        }
+
+        // If the new page is still 0, that means we encountered a page number that would be forbidden
+        // In this case, skip the generation of the actual watch list message and don't change anything
+        if new_page != 0 {
+            match &sorted_movie_list {
+                SortedMovieList::WatchListUserSorted(_, user_sorted_watch_list) => {
+                    watch_list_string = generate_user_sorted_watch_list_page_string(
+                        &user_sorted_watch_list,
+                        new_page
+                    );
+                },
+                SortedMovieList::WatchListIdSorted(_, id_sorted_watch_list) => {
+                    watch_list_string = generate_id_sorted_watch_list_page_string(
+                        &id_sorted_watch_list, 
+                        new_page
+                    );
+                },
+                SortedMovieList::HistoryUserSorted(_, user_sorted_history) => {
+                    watch_list_string = generate_user_sorted_history_page_string(
+                        &user_sorted_history,
+                        new_page
+                    );
+                },
+                SortedMovieList::HistoryDateSorted(_, date_sorted_history) => {
+                    watch_list_string = generate_date_sorted_history_page_string(
+                        &date_sorted_history,
+                        new_page
+                    );
+                }
+            }
+
+            let _ = bot_data.bot.edit_embed(
+                reaction.channel_id,
+                message_id,
+                |embed| embed
+                    .title("Filmliste")
+                    .description(watch_list_string.as_str())
+                    .color(COLOR_BOT)
+                    .footer(|footer| footer.text(format!("Seite {}/{}", new_page, total_pages).as_str()))
+            );
+
+            // Check if the watch list gets paginated or the history instead
+            match sorted_movie_list {
+                SortedMovieList::WatchListIdSorted(_, _) | SortedMovieList::WatchListUserSorted(_, _) => {
+                    // Find the entry in wait_for_reaction and delete it
+                    if let Some((idx, _)) = bot_data.wait_for_reaction.iter().enumerate()
+                    .find(|(_, element)| if let crate::general_behaviour::WaitingForReaction::WatchListPagination(_, _, _) = element {
+                            true
+                        } else {
+                            false
+                        }
+                    )
+                    {
+                        bot_data.wait_for_reaction.remove(idx);
+                    }
+
+                    // And add the new entry into wait_for_reaction
+                    bot_data.wait_for_reaction.push(
+                        crate::general_behaviour::WaitingForReaction::WatchListPagination(
+                            message_id,
+                            sorted_movie_list,
+                            if new_page == 0 {previous_page} else {new_page}
+                        )
+                    );
+                },
+                SortedMovieList::HistoryDateSorted(_, _) | SortedMovieList::HistoryUserSorted(_, _) => {
+                    // Find the entry in wait_for_reaction and delete it
+                    if let Some((idx, _)) = bot_data.wait_for_reaction.iter().enumerate()
+                    .find(|(_, element)| if let crate::general_behaviour::WaitingForReaction::HistoryPagination(_, _, _) = element {
+                            true
+                        } else {
+                            false
+                        }
+                    )
+                    {
+                        bot_data.wait_for_reaction.remove(idx);
+                    }
+
+                    // And add the new entry into wait_for_reaction
+                    bot_data.wait_for_reaction.push(
+                        crate::general_behaviour::WaitingForReaction::HistoryPagination(
+                            message_id,
+                            sorted_movie_list,
+                            if new_page == 0 {previous_page} else {new_page}
+                        )
+                    );
+                }
+            }
         }
     }
+}
+
+/**
+ * Generates the paginated description text for the id sorted watch list
+ */
+fn generate_id_sorted_watch_list_page_string(id_sorted_watch_list: &Vec<(u32, WatchListEntry)>, page_to_show: usize) -> String {
+    let mut watch_list_string = String::new();
+
+    let watch_list_count = id_sorted_watch_list.len();
+    if watch_list_count == 1 {
+        watch_list_string += format!("Es ist zur Zeit **{}** Film auf der Liste\n\n", watch_list_count).as_str();
+    } else {
+        watch_list_string += format!("Es sind zur Zeit **{}** Filme auf der Liste\n\n", watch_list_count).as_str();
+    }
+
+    if watch_list_count == 0 {
+        return watch_list_string;
+    }
+
+    watch_list_string += format!("Die Filme werden geordnet nach ID angezeigt.\n\n").as_str();
+
+    let first_index_to_show = (page_to_show - 1) * crate::MAX_ENTRIES_PER_PAGE;
+
+    // For every movie entry
+    id_sorted_watch_list.iter()
+        // Get the index of every element
+        .enumerate()
+        // Get only those elements that belong on that page
+        .filter(|(idx, (_, _))| if *idx >= first_index_to_show && *idx < first_index_to_show + crate::MAX_ENTRIES_PER_PAGE {
+            true
+        } else { 
+            false
+        })
+        // Now build the watch_list_string for those
+        .for_each(
+            |(_, (id, entry))| {
+                watch_list_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}** am {}\n\n", 
+                    entry.status.get_emoji(), 
+                    entry.movie.movie_title, 
+                    get_movie_link(entry.movie.tmdb_id, false), 
+                    id.to_string(), 
+                    entry.user, 
+                    timestamp_to_string(&entry.added_timestamp, false)
+                ).as_str();
+            });
 
     watch_list_string
 }
@@ -634,79 +941,197 @@ fn count_watch_list_movies(bot_data: &crate::BotData) -> usize {
 /**
  * Formats the watch list hash map as a movie history and sends it as an embedded message
  */
-pub fn show_history(bot_data: &crate::BotData, order: String) {
+pub fn show_history(bot_data: &mut crate::BotData, order: String) {
     let message = bot_data.message.as_ref().expect("Passing message to show_history function failed.");
 
-    let mut history_string: String = String::new();
-    let history_count = count_history_movies(bot_data);
-    if history_count == 1 {
-        history_string += format!("Es ist zur Zeit **{}** Film im Verlauf\n", history_count).as_str();
-    } else {
-        history_string += format!("Es sind zur Zeit **{}** Filme im Verlauf\n", history_count).as_str();
+    // First check if there was already a history message waiting for reactions
+    if let Some((idx, message_id)) = bot_data.wait_for_reaction.iter().enumerate()
+        .find_map(|(idx, x)| if let crate::general_behaviour::WaitingForReaction::HistoryPagination(message_id, _, _) = x {
+            Some((idx, message_id))
+        } else {
+            None
+        })
+    {
+        // If there was, delete the reactions of the bot on that message and remove it from the
+        // wait_for_reaction vector
+        let _ = bot_data.bot.delete_reaction(
+            message.channel_id,
+            *message_id,
+            None,
+            discord::model::ReactionEmoji::Unicode("⬅️".to_string())
+        );
+
+        let _ = bot_data.bot.delete_reaction(
+            message.channel_id,
+            *message_id,
+            None,
+            discord::model::ReactionEmoji::Unicode("➡️".to_string())
+        );
+
+        bot_data.wait_for_reaction.remove(idx);
     }
+
+    let mut history_string = String::new();
+    let history_count = count_history_movies(bot_data);
+    let sorted_movie_list_enum_option: Option<SortedMovieList>;
+    let total_pages: usize;
 
     if history_count > 0 {
         // If the ordering by user is demanded
         if order == "user" {
-            history_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
+            let user_sorted_history = create_user_sorted_history_vector(bot_data);
+            total_pages = user_sorted_history.iter().map(|x| x.number_of_pages_required).sum();
 
-            history_string += generate_user_sorted_history_description(bot_data).as_str();
+            history_string += generate_user_sorted_history_page_string(
+                    &user_sorted_history, 
+                    1
+                ).as_str();
+            
+            sorted_movie_list_enum_option = Some(SortedMovieList::HistoryUserSorted(total_pages, user_sorted_history));
         } 
         // If the ordering should be by date
         else {
-            history_string += format!("Die Filme werden in zeitlicher Reihenfolge angezeigt.\n\n").as_str();
+            // Get all movies from the history
+            let mut date_sorted_history: Vec<(u32, WatchListEntry)> = bot_data.watch_list.iter()
+                .filter_map(|(id, entry)| if entry.status.is_history_status() {
+                    Some((*id, entry.clone()))
+                } else {
+                    None
+                })
+                .collect();
+            
+            // And sort them by date
+            date_sorted_history.sort_by(
+                |a, b| 
+                    a.1.watched_or_removed_timestamp
+                        .expect("Movie did not have a watched_or_removed timestamp in show_history")
+                        .cmp(
+                            &b.1.watched_or_removed_timestamp
+                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                        )
+            );
+            
+            total_pages = (date_sorted_history.len() as f64 / crate::MAX_ENTRIES_PER_PAGE as f64).ceil() as usize;
 
-            history_string += generate_random_sorted_history_description(bot_data).as_str();
+            history_string += generate_date_sorted_history_page_string(&date_sorted_history, 1).as_str();
+
+            sorted_movie_list_enum_option = Some(SortedMovieList::HistoryDateSorted(total_pages, date_sorted_history));
         }
+    } else {
+        let _ = bot_data.bot.send_embed(
+            message.channel_id,
+            "",
+            |embed| embed
+                .title("Verlauf")
+                .description("Es sind zur Zeit **0** Filme im Verlauf")
+                .color(COLOR_BOT)
+        );
+        return;
     }
+
+    // We know, that this can't be none now, so unwrap the value
+    let sorted_movie_list_enum = sorted_movie_list_enum_option.unwrap();
     
-    let _ = bot_data.bot.send_embed(
+    if let Ok(message) = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title("Verlauf").description(history_string.as_str()).color(COLOR_BOT)
-    );
+        |embed| embed
+            .title("Verlauf")
+            .description(history_string.as_str())
+            .color(COLOR_BOT)
+            .footer(|footer| footer.text(format!("Seite {}/{}", 1, total_pages).as_str()))
+    ) {
+        let _ = bot_data.bot.add_reaction(
+            message.channel_id,
+            message.id,
+            discord::model::ReactionEmoji::Unicode("⬅️".to_string())
+        );
+
+        let _ = bot_data.bot.add_reaction(
+            message.channel_id,
+            message.id,
+            discord::model::ReactionEmoji::Unicode("➡️".to_string())
+        );
+
+        bot_data.wait_for_reaction.push(
+            crate::general_behaviour::WaitingForReaction::WatchListPagination(
+                message.id, 
+                sorted_movie_list_enum,
+                1
+            )
+        );
+    }
 }
 
 /**
- * Generates the description for the user sorted history
+ * Generates the paginated description for the user sorted history and for the given page
  */
-fn generate_user_sorted_history_description(bot_data: &crate::BotData) -> String {
-    let user_movies = create_user_sorted_history(bot_data);
+fn generate_user_sorted_history_page_string(
+    user_sorted_history: &Vec<UserSortedMovieListVectorEntry>,
+    page_to_show: usize
+) -> String {
     let mut history_string = String::new();
-
-    // For every user
-    for (user, entry_vector) in user_movies.iter().sorted() {
-        history_string += format!("Hinzugefügt von **{}**\n\n", user).as_str();
-        
-        let mut time_sorted_vector = entry_vector.clone();
-        
-        time_sorted_vector.sort_by( 
-            |a, b| 
-            a.1.watched_or_removed_timestamp
-                .expect("Movie did not have a watched_or_removed timestamp in show_history")
-                .cmp(
-                    &b.1.watched_or_removed_timestamp
-                    .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                )
-            );
-
-        // For every movie entry
-        for (id, entry) in time_sorted_vector {
-            history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | {} am {}\n\n", 
-                entry.status.get_emoji(), 
-                entry.movie.movie_title, 
-                get_movie_link(entry.movie.tmdb_id, false),
-                id.to_string(),
-                if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
-                timestamp_to_string(
-                    &entry.watched_or_removed_timestamp
-                        .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                    , false)
-                ).as_str();
-        }
-
-        history_string += "\n";
+    
+    let history_count: usize = user_sorted_history.iter().map(|x| x.entries.len()).sum();
+    if history_count == 1 {
+        history_string += format!("Es ist zur Zeit **{}** Film im Verlauf\n\n", history_count).as_str();
+    } else {
+        history_string += format!("Es sind zur Zeit **{}** Filme im Verlauf\n\n", history_count).as_str();
     }
+
+    if history_count == 0 {
+        return history_string;
+    }
+
+    history_string += format!("Die Filme werden geordnet nach dem Nutzer angezeigt, welcher sie hinzugefügt hat.\n\n").as_str();
+
+    let mut accumulated_pages: usize = 0;
+    let mut entry_to_show: Option<UserSortedMovieListVectorEntry> = None;
+
+    // Find the entry in the vector that contains the page to show
+    for entry in user_sorted_history {
+        accumulated_pages += entry.number_of_pages_required;
+
+        if page_to_show <= accumulated_pages {
+            entry_to_show = Some(entry.clone());
+            break;
+        }
+    }
+
+    if entry_to_show.is_none() {
+        return format!("Die Seite mit der Nummer {} gibt es in dieser Liste nicht.", accumulated_pages);
+    }
+
+    // We now know that entry_to_show is a some value, so unwrap it
+    let entry_to_show = entry_to_show.unwrap();
+
+    // Calculate the first index inside the entry vector that will be displayed on the page
+    let first_index_to_show = ((page_to_show - 1) - (accumulated_pages - entry_to_show.number_of_pages_required)) * crate::MAX_ENTRIES_PER_PAGE;
+
+    history_string += format!("Hinzugefügt von **{}**\n\n", entry_to_show.user_name).as_str();
+
+    // Now iterate over the entry vector
+    entry_to_show.entries.iter()
+        // Returns the entries with an index
+        .enumerate()
+        // Get only those elements that should be shown on that page
+        .filter(|(idx, _)| *idx >= first_index_to_show && *idx < first_index_to_show + crate::MAX_ENTRIES_PER_PAGE)
+        // For each of those append the string to the watch list
+        .for_each(
+            |(_, entry)| {
+                history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | {} am {}\n\n", 
+                    entry.1.status.get_emoji(), 
+                    entry.1.movie.movie_title, 
+                    get_movie_link(entry.1.movie.tmdb_id, false),
+                    entry.0.to_string(),
+                    if entry.1.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
+                    timestamp_to_string(
+                        &entry.1.watched_or_removed_timestamp
+                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                        , false)
+                    ).as_str();
+            }
+        );
 
     history_string
 }
@@ -738,42 +1163,89 @@ fn create_user_sorted_history(bot_data: &crate::BotData) -> HashMap<&String, Vec
     user_movies
 }
 
-fn generate_random_sorted_history_description(bot_data: &crate::BotData) -> String {
+/**
+ * Returns a watch list vector that is sorted by users and contains all information needed for paginating the entries
+ */
+fn create_user_sorted_history_vector(bot_data: &crate::BotData) -> Vec<UserSortedMovieListVectorEntry> {
+    let mut user_sorted_history_hash_map = create_user_sorted_history(bot_data);
+    let get_number_pages_as_usize = |entries_len: usize| -> usize {
+        (entries_len as f64 / crate::MAX_ENTRIES_PER_PAGE as f64).ceil() as usize
+    };
+
+    user_sorted_history_hash_map.iter_mut()
+        .sorted()
+        .map(
+            |(name, entries)| {
+                // Sort the entries of each user by the date they have been watched (or removed)
+                entries.sort_by(
+                    |a, b| 
+                        a.1.watched_or_removed_timestamp
+                            .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                            .cmp(
+                                &b.1.watched_or_removed_timestamp
+                                .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                            )
+                );
+
+                UserSortedMovieListVectorEntry {
+                    user_name: (*name).clone(),
+                    number_of_pages_required: get_number_pages_as_usize(entries.len()),
+                    entries: entries.iter().map(|(id, value)| (*id, (*value).clone())).collect(),
+                }
+            }
+        )
+        .collect()
+}
+
+/** 
+ * Generates the string to the given page for the paginated history
+ */
+fn generate_date_sorted_history_page_string(date_sorted_history: &Vec<(u32, WatchListEntry)>, page_to_show: usize) -> String {
     let mut history_string = String::new();
 
-    let mut time_sorted_vector = bot_data.watch_list.clone().into_iter()
-        .filter(|(_id, entry)| entry.status.is_history_status())
-        .map(|(id, entry)| (id, entry))
-        .collect::<Vec<(u32, WatchListEntry)>>();
+    let history_count = date_sorted_history.len();
+    if history_count == 1 {
+        history_string += format!("Es ist zur Zeit **{}** Film im Verlauf\n\n", history_count).as_str();
+    } else {
+        history_string += format!("Es sind zur Zeit **{}** Filme im Verlauf\n\n", history_count).as_str();
+    }
 
-    time_sorted_vector.sort_by( 
-        |a, b| 
-        a.1.watched_or_removed_timestamp
-            .expect("Movie did not have a watched_or_removed timestamp in show_history")
-            .cmp(
-                &b.1.watched_or_removed_timestamp
-                .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-            )
-        );
+    if history_count == 0 {
+        return history_string;
+    }
+
+    history_string += format!("Die Filme werden geordnet nach Datum angezeigt.\n\n").as_str();
+
+    let first_index_to_show = (page_to_show - 1) * crate::MAX_ENTRIES_PER_PAGE;
 
     // For every movie entry
-    for (id, entry) in time_sorted_vector {
-        if entry.status.is_history_status() {
-            history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}**, {} am {}\n\n", 
-                entry.status.get_emoji(), 
-                entry.movie.movie_title, 
-                get_movie_link(entry.movie.tmdb_id, false),
-                id.to_string(),
-                entry.user, 
-                if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
-                timestamp_to_string(
-                    &entry.watched_or_removed_timestamp
-                    .expect("Movie did not have a watched_or_removed_timestamp in show_history")
-                    , false
-                )
-            ).as_str();
-        }
-    }
+    date_sorted_history.iter()
+        // Get the index of every element
+        .enumerate()
+        // Get only those elements that belong on that page
+        .filter(|(idx, (_, _))| if *idx >= first_index_to_show && *idx < first_index_to_show + crate::MAX_ENTRIES_PER_PAGE {
+            true
+        } else { 
+            false
+        })
+        // Now build the history_string for those
+        .for_each(
+            |(_, (id, entry))| {
+                history_string += format!(" {} [**{}**]({})\n> `{:0>4}` | hinzugefügt von **{}**, {} am {}\n\n", 
+                    entry.status.get_emoji(), 
+                    entry.movie.movie_title, 
+                    get_movie_link(entry.movie.tmdb_id, false),
+                    id.to_string(),
+                    entry.user, 
+                    if entry.status == MovieStatus::Watched {"geschaut"} else {"entfernt"},
+                    timestamp_to_string(
+                        &entry.watched_or_removed_timestamp
+                        .expect("Movie did not have a watched_or_removed_timestamp in show_history")
+                        , false
+                    )
+                ).as_str();
+            }
+        );
 
     history_string
 }
