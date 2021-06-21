@@ -514,3 +514,79 @@ pub fn another_user_is_adding_a_movie_information(bot_data: &crate::BotData) {
         .color(crate::COLOR_INFORMATION)
     );
 }
+
+/**
+ * Sends an error message explaining the user why the data could not be stored
+ */
+pub fn read_store_data_error(bot_data: &crate::BotData, error: serde_json::Error) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::read_store_data_error failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Fehler beim Speichern")
+            .description(
+                format!(
+                    "Beim Speichern oder Laden der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
+                    `{} in line {}, column {}`
+                    
+                    Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, können die Daten nicht abgespeichert oder geladen werden.",
+                    match error.classify() {
+                        serde_json::error::Category::Io => "IO Error: Failed to read or write bytes on an IO stream",
+                        serde_json::error::Category::Syntax => "Syntax Error: Input is not syntactically correct JSON",
+                        serde_json::error::Category::Data => "Data Error: Input data is semantically incorrect",
+                        serde_json::error::Category::Eof => "End of file Error: File end came unexpected",
+                    },
+                    error.line(),
+                    error.column()
+                )
+                .as_str()
+            )
+            .color(crate::COLOR_ERROR)
+    );
+}
+
+/**
+ * Sends an error message explaining the user, that the file could not be opened
+ */
+pub fn open_file_error(bot_data: &crate::BotData, error: std::io::Error) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::open_file_error failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Fehler beim Öffnen der Speicherdatei")
+            .description(
+                format!(
+                    "Beim Öffnen der Datei zum Speichern/Lesen der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
+                    `{:#?}`
+                
+                    Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, kann es sein, dass die Daten nicht eingelesen oder gespeichert werden können.",
+                    error
+                )
+                .as_str()
+            )
+            .color(crate::COLOR_ERROR)
+        );
+}
+
+/**
+ * Sends an error message explaining the user, that during the writing of the file an error occured.
+ */
+pub fn write_error(bot_data: &crate::BotData, error: std::io::Error) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::write_error failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Fehler beim Öffnen der Speicherdatei")
+            .description(
+                format!(
+                    "Beim Schreiben der Datei zum Speichern der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
+                    `{:#?}`
+                
+                    Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, kann es sein, dass die Daten nicht gespeichert werden können.",
+                    error
+                )
+                .as_str()
+            )
+            .color(crate::COLOR_ERROR)
+        );
+}

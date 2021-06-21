@@ -7,7 +7,7 @@ use crate::general_behaviour::*;
 use crate::send_message;
 use tmdb::{themoviedb::*};
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum MovieStatus {
     NotWatched,
     Watched,
@@ -79,7 +79,9 @@ pub enum MovieStatusErr {
     UnknownStatus,
 }
 
-#[derive(Eq, Clone, Debug)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct WatchListEntry {
     pub movie: Movie,
     pub user: String,
@@ -107,7 +109,7 @@ impl PartialEq for WatchListEntry {
     }
 }
 
-#[derive(Eq, Clone, Debug)]
+#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct Movie {
     pub movie_title: String,
     pub original_title: String,
@@ -139,7 +141,7 @@ impl PartialEq for Movie {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortedMovieList {
     WatchListUserSorted(/*total_pages*/ usize, Vec<UserSortedMovieListVectorEntry>),
     WatchListIdSorted(/*total_pages*/ usize, Vec<(u32, WatchListEntry)>),
@@ -147,7 +149,7 @@ pub enum SortedMovieList {
     HistoryDateSorted(/*total_pages*/ usize, Vec<(u32, WatchListEntry)>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserSortedMovieListVectorEntry {
     pub user_name: String,
     pub number_of_pages_required: usize,

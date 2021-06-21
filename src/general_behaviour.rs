@@ -1,7 +1,9 @@
 use crate::COLOR_INFORMATION;
 use regex::Regex;
 
-#[derive(Clone, Debug)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WaitingForReaction {
     AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
     Vote(discord::model::MessageId),

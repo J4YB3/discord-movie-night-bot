@@ -3,6 +3,7 @@ use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
 use std::{collections::HashMap, str::FromStr};
 use commands::{Command, ParseCommandError, SimpleCommand};
 use tmdb::{themoviedb::*};
+use serde::{Serialize, Deserialize};
 
 mod commands;
 mod movie_behaviour;
@@ -12,21 +13,40 @@ mod send_message;
 mod help_behaviour;
 mod history_behaviour;
 mod watch_list_behaviour;
+mod serde_behaviour;
 
+#[derive(Serialize, Deserialize)]
 pub struct BotData {
+    #[serde(skip)]
+    #[serde(default = "get_default_discord_struct")]
     bot: Discord,
+
+    #[serde(skip)]
+    #[serde(default = "get_tmdb_struct")]
+    tmdb: TMDb,
+
+    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
+    wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
+    votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
     bot_user: discord::model::User,
     message: Option<Model::Message>,
-    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
     next_movie_id: u32,
     server_id: Model::ServerId,
     server_roles: Vec<Model::Role>,
     custom_prefix: char,
-    tmdb: TMDb,
-    wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
-    votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
     movie_limit_per_user: u32,
     movie_vote_limit: u32,
+}
+
+fn get_tmdb_struct() -> TMDb {
+    TMDb {
+        api_key: external_data::TMDB_API_KEY,
+        language: "de",
+    }
+}
+
+fn get_default_discord_struct() -> Discord {
+    Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed")
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -36,47 +56,73 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.4.1";
+const VERSION: &str = "0.5.0";
 
 fn main() {
-    let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
-    let votes: HashMap<u64, voting_behaviour::Vote> = HashMap::new();
+    // let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
+    // let votes: HashMap<u64, voting_behaviour::Vote> = HashMap::new();
 
-    let bot = Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed");
+    let bot = get_default_discord_struct();
 
     let (mut connection, ready_event) = bot
         .connect()
-        .expect("Establishing connecting to server failed");
+        .expect("Establishing connection to server failed");
 
     let mut state = State::new(ready_event);
 
-    let tmdb = TMDb {
-        api_key: external_data::TMDB_API_KEY,
-        language: "de",
-    };
+    let tmdb = get_tmdb_struct();
 
     let state_user = state.user();
 
-    let mut bot_data = BotData {
-        bot: bot,
-        bot_user: Model::User {
-            id: state_user.id,
-            name: state_user.username.clone(),
-            discriminator: state_user.discriminator,
-            avatar: state_user.avatar.clone(),
-            bot: state_user.bot,
+    let mut bot_data: BotData;
+    match serde_behaviour::read_bot_data() {
+        Ok(data) => {
+            bot_data = data;
+            // Fill the struct with the data that must be created anew on every start
+            bot_data.bot = bot;
+            bot_data.bot_user = Model::User {
+                id: state_user.id,
+                name: state_user.username.clone(),
+                discriminator: state_user.discriminator,
+                avatar: state_user.avatar.clone(),
+                bot: state_user.bot,
+            };
+            bot_data.tmdb = tmdb;
         },
-        message: None,
-        watch_list: watch_list,
-        next_movie_id: 0,
-        server_id: ServerId(0),
-        server_roles: vec![],
-        custom_prefix: '!',
-        tmdb: tmdb,
-        wait_for_reaction: vec![],
-        votes: votes,
-        movie_limit_per_user: 10,
-        movie_vote_limit: 2,
+        Err(string) => {
+            println!("{}\n", string);
+            println!("WARNING: New BotData created, because file was empty or an error occured!");
+            println!("Do you want to proceed, and risk losing data? [y/n]");
+            let mut answer = String::new();
+            let _ = std::io::stdin().read_line(&mut answer).unwrap();
+            println!("Answer was: {}", answer);
+            if answer.trim() == "y" {
+                bot_data = BotData {
+                    bot: bot,
+                    bot_user: Model::User {
+                        id: state_user.id,
+                        name: state_user.username.clone(),
+                        discriminator: state_user.discriminator,
+                        avatar: state_user.avatar.clone(),
+                        bot: state_user.bot,
+                    },
+                    message: None,
+                    watch_list: HashMap::new(),
+                    next_movie_id: 0,
+                    server_id: ServerId(0),
+                    server_roles: vec![],
+                    custom_prefix: '!',
+                    tmdb: tmdb,
+                    wait_for_reaction: vec![],
+                    votes: HashMap::new(),
+                    movie_limit_per_user: 10,
+                    movie_vote_limit: 2,
+                };
+            } else {
+                println!("Bot is shutting down now.");
+                return;
+            }
+        },
     };
 
     loop {
@@ -120,6 +166,7 @@ fn main() {
 
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == String::from(format!("{}{}", bot_data.custom_prefix, crate::commands::QUIT)) {
+                    serde_behaviour::store_bot_data(&bot_data);
                     let _ = bot_data.bot.send_embed(
                         message.channel_id,
                         "",
@@ -157,6 +204,7 @@ fn main() {
                                     // The correct message was found and has therefore now been reacted to
                                     // Remove the wait_for_reaction element from bot_data and break the loop
                                     bot_data.wait_for_reaction.remove(waiting_idx);
+                                    serde_behaviour::store_bot_data(&bot_data);
                                     break;
                                 }
                             },
@@ -168,6 +216,7 @@ fn main() {
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
                                     // Only break the loop since the correct message was found
+                                    serde_behaviour::store_bot_data(&bot_data);
                                     break;
                                 }
                             },
@@ -182,6 +231,7 @@ fn main() {
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
                                     // Only break the loop since the correct message was found
+                                    serde_behaviour::store_bot_data(&bot_data);
                                     break;
                                 }
                             },
@@ -194,6 +244,7 @@ fn main() {
                                         curr_page, 
                                         &reaction
                                     );
+                                    serde_behaviour::store_bot_data(&bot_data);
                                 }
                             },
                             WaitingForReaction::HistoryPagination(message_id, sorted_history_enum, curr_page) => {
@@ -205,6 +256,7 @@ fn main() {
                                         curr_page, 
                                         &reaction
                                     );
+                                    serde_behaviour::store_bot_data(&bot_data);
                                 }
                             }
                         }
@@ -304,6 +356,9 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         Info => send_message::info(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
+
+    // After every command, assume the bot data was changed, so store it to the file system
+    serde_behaviour::store_bot_data(&bot_data);
 }
 
 fn handle_error(bot_data: &BotData, error: ParseCommandError) {

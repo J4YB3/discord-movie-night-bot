@@ -1,21 +1,22 @@
 use rand::distributions::{Distribution, Uniform};
 use std::collections::HashSet;
 use crate::send_message;
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum VoteOptionEnum {
     GeneralVoteOption(VoteOption<String>),
     MovieVoteOption(VoteOption<crate::movie_behaviour::Movie>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VoteOption<T> {
     emoji: String,
     cargo: T,
     votes: Vec<discord::model::UserId>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Vote {
     creator: discord::model::User,
     creation_date: chrono::DateTime<chrono::FixedOffset>,
