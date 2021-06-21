@@ -36,7 +36,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.4.0";
+const VERSION: &str = "0.4.1";
 
 fn main() {
     let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
