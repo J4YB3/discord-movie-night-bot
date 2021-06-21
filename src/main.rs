@@ -56,12 +56,9 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.0";
+const VERSION: &str = "0.5.1";
 
 fn main() {
-    // let watch_list: HashMap<u32, movie_behaviour::WatchListEntry> = HashMap::new();
-    // let votes: HashMap<u64, voting_behaviour::Vote> = HashMap::new();
-
     let bot = get_default_discord_struct();
 
     let (mut connection, ready_event) = bot
@@ -125,7 +122,19 @@ fn main() {
         },
     };
 
+    let one_hour = std::time::Duration::from_secs(3600);
+    let mut last_save = std::time::Instant::now();
+    let mut something_changed = false;
+
     loop {
+        // The last save was more than an hour ago
+        if something_changed && last_save.elapsed() >= one_hour {
+            // So save the bot_data and reset the last_save time
+            serde_behaviour::store_bot_data(&bot_data);
+            last_save = std::time::Instant::now();
+            something_changed = false;
+        }
+
         let event = match connection.recv_event() {
 			Ok(event) => event,
 			Err(err) => {
@@ -181,6 +190,7 @@ fn main() {
                     // Indicate that the bot is processing the query
                     let _ = bot_data.bot.broadcast_typing(message.channel_id);
                     call_behaviour(&mut bot_data);
+                    something_changed = true;
                 }
             },
             Model::Event::ReactionAdd(reaction) => {
@@ -204,7 +214,7 @@ fn main() {
                                     // The correct message was found and has therefore now been reacted to
                                     // Remove the wait_for_reaction element from bot_data and break the loop
                                     bot_data.wait_for_reaction.remove(waiting_idx);
-                                    serde_behaviour::store_bot_data(&bot_data);
+                                    something_changed = true;
                                     break;
                                 }
                             },
@@ -216,7 +226,7 @@ fn main() {
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
                                     // Only break the loop since the correct message was found
-                                    serde_behaviour::store_bot_data(&bot_data);
+                                    something_changed = true;
                                     break;
                                 }
                             },
@@ -231,7 +241,7 @@ fn main() {
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
                                     // Only break the loop since the correct message was found
-                                    serde_behaviour::store_bot_data(&bot_data);
+                                    something_changed = true;
                                     break;
                                 }
                             },
@@ -244,7 +254,7 @@ fn main() {
                                         curr_page, 
                                         &reaction
                                     );
-                                    serde_behaviour::store_bot_data(&bot_data);
+                                    something_changed = true;
                                 }
                             },
                             WaitingForReaction::HistoryPagination(message_id, sorted_history_enum, curr_page) => {
@@ -256,7 +266,7 @@ fn main() {
                                         curr_page, 
                                         &reaction
                                     );
-                                    serde_behaviour::store_bot_data(&bot_data);
+                                    something_changed = true;
                                 }
                             }
                         }
@@ -356,9 +366,6 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         Info => send_message::info(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
-
-    // After every command, assume the bot data was changed, so store it to the file system
-    serde_behaviour::store_bot_data(&bot_data);
 }
 
 fn handle_error(bot_data: &BotData, error: ParseCommandError) {
