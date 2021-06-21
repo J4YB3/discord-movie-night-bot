@@ -10,6 +10,8 @@ mod general_behaviour;
 mod voting_behaviour;
 mod send_message;
 mod help_behaviour;
+mod history_behaviour;
+mod watch_list_behaviour;
 
 pub struct BotData {
     bot: Discord,
@@ -243,7 +245,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         RemoveMovieByTitle(title) => {
             movie_behaviour::remove_movie_by_title(bot_data, title.as_str())
         },
-        ShowWatchlist(order) => movie_behaviour::show_watch_list(bot_data, order),
+        ShowWatchlist(order) => watch_list_behaviour::show_watch_list(bot_data, order),
         Help(simple_command) => match simple_command {
             SimpleCommand::General => help_behaviour::show_help(bot_data),
             SimpleCommand::Help => help_behaviour::show_help_help(bot_data),
@@ -282,7 +284,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             }
         },
         Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
-        History(order) => movie_behaviour::show_history(bot_data, order),
+        History(order) => history_behaviour::show_history(bot_data, order),
         SetStatus(id, status) => movie_behaviour::set_status(bot_data, id, status),
         Unavailable(id) => movie_behaviour::set_status(bot_data, id, "Unavailable".to_string()),
         Watched(id, date) => movie_behaviour::set_status_watched(bot_data, id, date),
