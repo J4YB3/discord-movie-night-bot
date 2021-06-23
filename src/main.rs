@@ -89,7 +89,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.3";
+const VERSION: &str = "0.5.4";
 
 fn main() {
     let bot = get_default_discord_struct();
@@ -149,6 +149,7 @@ fn main() {
                     movie_vote_limit: 2,
                     adding_movie: None,
                 };
+                println!("Bot is running now.");
             } else {
                 println!("Bot is shutting down now.");
                 return;
@@ -236,6 +237,7 @@ fn main() {
 
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == String::from(format!("{}{}", bot_data.custom_prefix, crate::commands::QUIT)) {
+                    bot_data.message = Some(message.clone());
                     serde_behaviour::store_bot_data(&bot_data);
 
                     general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(&bot_data);
