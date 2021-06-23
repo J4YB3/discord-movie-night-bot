@@ -25,17 +25,36 @@ pub struct BotData {
     #[serde(default = "get_tmdb_struct")]
     tmdb: TMDb,
 
+    #[serde(default)]
     watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
+    
+    #[serde(skip)]
+    #[serde(default)]
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
+    
+    #[serde(default)]
     votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
+    
+    #[serde(default = "get_default_bot_user")]
     bot_user: discord::model::User,
+
+    #[serde(default)]
     message: Option<Model::Message>,
-    next_movie_id: u32,
-    server_id: Model::ServerId,
+
+    #[serde(default)]
     server_roles: Vec<Model::Role>,
+
+    #[serde(default = "get_default_server_id")]
+    server_id: Model::ServerId,
+
+    #[serde(skip)]
+    #[serde(default)]
+    adding_movie: Option<std::time::Instant>,
+
     custom_prefix: char,
     movie_limit_per_user: u32,
     movie_vote_limit: u32,
+    next_movie_id: u32,
 }
 
 fn get_tmdb_struct() -> TMDb {
@@ -49,6 +68,20 @@ fn get_default_discord_struct() -> Discord {
     Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed")
 }
 
+fn get_default_bot_user() -> discord::model::User {
+    discord::model::User {
+        id: discord::model::UserId(827634208204783627),
+        name: String::from("Movie Night Bot"),
+        discriminator: 7301,
+        avatar: Some(String::from("7c8c90ae23711af29b91880b44fdfd4a")),
+        bot: true
+    }
+}
+
+fn get_default_server_id() -> discord::model::ServerId {
+    discord::model::ServerId(0)
+}
+
 const COLOR_ERROR: u64 = 0xff0000; // red
 const COLOR_SUCCESS: u64 = 0x7ef542; // green
 const COLOR_WARNING: u64 = 0xf5d442; // yellow
@@ -56,7 +89,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.1";
+const VERSION: &str = "0.5.3";
 
 fn main() {
     let bot = get_default_discord_struct();
@@ -114,6 +147,7 @@ fn main() {
                     votes: HashMap::new(),
                     movie_limit_per_user: 10,
                     movie_vote_limit: 2,
+                    adding_movie: None,
                 };
             } else {
                 println!("Bot is shutting down now.");
@@ -122,6 +156,7 @@ fn main() {
         },
     };
 
+    let thirty_seconds = std::time::Duration::from_secs(30);
     let one_hour = std::time::Duration::from_secs(3600);
     let mut last_save = std::time::Instant::now();
     let mut something_changed = false;
@@ -133,6 +168,32 @@ fn main() {
             serde_behaviour::store_bot_data(&bot_data);
             last_save = std::time::Instant::now();
             something_changed = false;
+        }
+
+        // See if an add_movie command is waiting too long
+        if let Some(start_time) = bot_data.adding_movie {
+            if start_time.elapsed() >= thirty_seconds {
+                // If so, remove the reactions from the message and remove the
+                // add_movie enum from waiting_for_reaction
+                let result = bot_data.wait_for_reaction.iter()
+                    .enumerate()
+                    .find_map(|(idx, entry)| 
+                        if let general_behaviour::WaitingForReaction::AddMovie(message, _) = entry {
+                            Some((idx, message))
+                        } else {
+                            None
+                        }
+                    );
+                
+                // If an entry that matches was found
+                if let Some((index, message)) = result {
+                    // Remove the reactions
+                    general_behaviour::remove_reactions_on_message(&bot_data, message, vec!["✅", "❎"]);
+                    bot_data.wait_for_reaction.remove(index);
+
+                    send_message::adding_movie_timed_out_information(&bot_data);
+                }
+            }
         }
 
         let event = match connection.recv_event() {
@@ -176,6 +237,9 @@ fn main() {
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content == String::from(format!("{}{}", bot_data.custom_prefix, crate::commands::QUIT)) {
                     serde_behaviour::store_bot_data(&bot_data);
+
+                    general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(&bot_data);
+
                     let _ = bot_data.bot.send_embed(
                         message.channel_id,
                         "",
@@ -206,9 +270,9 @@ fn main() {
                         // Get the current element
                         let waiting = bot_data.wait_for_reaction[waiting_idx].clone();
                         match waiting {
-                            WaitingForReaction::AddMovie(message_id, new_entry) => {
+                            WaitingForReaction::AddMovie(message, new_entry) => {
                                 // If the reaction happened to the correct message
-                                if reaction.message_id == message_id {
+                                if reaction.message_id == message.id {
                                     movie_behaviour::add_movie_by_reaction(&mut bot_data, &reaction, &new_entry);
 
                                     // The correct message was found and has therefore now been reacted to
@@ -218,10 +282,10 @@ fn main() {
                                     break;
                                 }
                             },
-                            WaitingForReaction::Vote(message_id) => {
+                            WaitingForReaction::Vote(message) => {
                                 // If the reaction happened to the correct message
-                                if reaction.message_id == message_id {
-                                    voting_behaviour::update_vote(&mut bot_data, &reaction, &message_id.0);
+                                if reaction.message_id == message.id {
+                                    voting_behaviour::update_vote(&mut bot_data, &reaction, &message.id.0);
 
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
@@ -230,8 +294,8 @@ fn main() {
                                     break;
                                 }
                             },
-                            WaitingForReaction::AddMovieToWatched(message_id, movie) => {
-                                if reaction.message_id == message_id {
+                            WaitingForReaction::AddMovieToWatched(message, movie) => {
+                                if reaction.message_id == message.id {
                                     movie_behaviour::handle_add_movie_to_watched_after_movie_vote(
                                         &mut bot_data, 
                                         &reaction, 
@@ -245,11 +309,11 @@ fn main() {
                                     break;
                                 }
                             },
-                            WaitingForReaction::WatchListPagination(message_id, sorted_watch_list_enum, curr_page) => {
-                                if reaction.message_id == message_id {
+                            WaitingForReaction::WatchListPagination(message, sorted_watch_list_enum, curr_page) => {
+                                if reaction.message_id == message.id {
                                     movie_behaviour::handle_watch_list_message_pagination_reaction(
                                         &mut bot_data,
-                                        message_id, 
+                                        message, 
                                         sorted_watch_list_enum, 
                                         curr_page, 
                                         &reaction
@@ -257,11 +321,11 @@ fn main() {
                                     something_changed = true;
                                 }
                             },
-                            WaitingForReaction::HistoryPagination(message_id, sorted_history_enum, curr_page) => {
-                                if reaction.message_id == message_id {
+                            WaitingForReaction::HistoryPagination(message, sorted_history_enum, curr_page) => {
+                                if reaction.message_id == message.id {
                                     movie_behaviour::handle_watch_list_message_pagination_reaction(
                                         &mut bot_data,
-                                        message_id, 
+                                        message, 
                                         sorted_history_enum, 
                                         curr_page, 
                                         &reaction

@@ -5,11 +5,11 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WaitingForReaction {
-    AddMovie(discord::model::MessageId, crate::movie_behaviour::WatchListEntry),
-    Vote(discord::model::MessageId),
-    AddMovieToWatched(discord::model::MessageId, crate::movie_behaviour::Movie),
-    WatchListPagination(discord::model::MessageId, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
-    HistoryPagination(discord::model::MessageId, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
+    AddMovie(discord::model::Message, crate::movie_behaviour::WatchListEntry),
+    Vote(discord::model::Message),
+    AddMovieToWatched(discord::model::Message, crate::movie_behaviour::Movie),
+    WatchListPagination(discord::model::Message, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
+    HistoryPagination(discord::model::Message, crate::movie_behaviour::SortedMovieList, /*curr_page:*/ usize),
 }
 
 /**
@@ -210,4 +210,44 @@ pub fn is_user_administrator(bot_data: &crate::BotData, user_id: discord::model:
 fn is_role_administrator(role: &discord::model::Role) -> bool {
     let admin_permissions = discord::model::permissions::Permissions::ADMINISTRATOR;
     role.permissions.contains(admin_permissions)
+}
+
+/**
+ * Removes all reactions on all messages that are stored in waiting_for_reactions
+ */
+pub fn remove_all_reactions_on_all_waiting_for_reaction_messages(bot_data: &crate::BotData) {
+    for waiting in bot_data.wait_for_reaction.iter() {
+        match waiting {
+            WaitingForReaction::AddMovie(message, _) | WaitingForReaction::AddMovieToWatched(message, _) => 
+                remove_reactions_on_message(bot_data, &message, vec!["✅", "❎"]),
+            WaitingForReaction::HistoryPagination(message, _, _) | WaitingForReaction::WatchListPagination(message, _, _) =>
+                remove_reactions_on_message(bot_data, &message, vec!["⬅️", "➡️"]),
+            WaitingForReaction::Vote(message) => {
+                let vote = bot_data.votes.get(&message.id.0);
+
+                if let Some(vote) = vote {
+                    crate::voting_behaviour::remove_all_reactions_on_previous_vote(
+                        bot_data, 
+                        vote, 
+                        (&message.channel_id, &message.id)
+                    );
+                }
+            }
+
+        }
+    }
+}
+
+/**
+ * Removes the given reactions on a message. Example emojis parameter: vec!["✅", "❎"]
+ */
+pub fn remove_reactions_on_message(bot_data: &crate::BotData, message: &discord::model::Message, emojis: Vec<&str>) {
+    for emoji in emojis {
+        let _ = bot_data.bot.delete_reaction(
+            message.channel_id,
+            message.id,
+            None,
+            discord::model::ReactionEmoji::Unicode(emoji.to_string())
+        );
+    }
 }

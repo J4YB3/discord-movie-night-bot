@@ -381,7 +381,8 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
             if add_movie {
                 if let Ok(res_message) = bot_response {
                     // Add the waiting for reaction enum entry to bot_data
-                    bot_data.wait_for_reaction.push(WaitingForReaction::AddMovie(res_message.id, new_entry));
+                    bot_data.wait_for_reaction.push(WaitingForReaction::AddMovie(res_message.clone(), new_entry));
+                    bot_data.adding_movie = Some(std::time::Instant::now());
 
                     // Add ✅ as reaction
                     let _ = bot_data.bot.add_reaction(res_message.channel_id, res_message.id, Model::ReactionEmoji::Unicode("✅".to_string()));
@@ -471,6 +472,7 @@ pub fn add_movie_by_reaction(bot_data: &mut crate::BotData, reaction: &discord::
         bot_data.watch_list.insert(bot_data.next_movie_id, copied_entry);
 
         bot_data.next_movie_id += 1;
+        bot_data.adding_movie = None;
 
         let _ = bot_data.bot.send_embed(
             reaction.channel_id,
@@ -526,10 +528,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
     let movie = bot_data.watch_list.get(&id);
     match movie {
         Some(watch_list_entry) => {
-            if watch_list_entry.user == message.author.name {
-                send_message::movie_removed_successfully(bot_data);
-                let _ = bot_data.watch_list.remove(&id);
-            } else if user_is_admin {
+            if user_is_admin || watch_list_entry.user == message.author.name {
                 send_message::movie_removed_successfully(bot_data);
                 let _ = bot_data.watch_list.remove(&id);
             } else {
@@ -548,7 +547,7 @@ pub fn remove_movie_by_id(bot_data: &mut crate::BotData, id: u32) {
  */
 pub fn handle_watch_list_message_pagination_reaction(
     bot_data: &mut crate::BotData,
-    message_id: discord::model::MessageId, 
+    message: discord::model::Message, 
     sorted_movie_list: SortedMovieList, 
     previous_page: usize,
     reaction: &discord::model::Reaction
@@ -556,7 +555,7 @@ pub fn handle_watch_list_message_pagination_reaction(
     // delete the users reaction
     let _ = bot_data.bot.delete_reaction(
         reaction.channel_id,
-        message_id,
+        message.id,
         Some(reaction.user_id),
         reaction.emoji.clone()
     );
@@ -619,7 +618,7 @@ pub fn handle_watch_list_message_pagination_reaction(
 
             let _ = bot_data.bot.edit_embed(
                 reaction.channel_id,
-                message_id,
+                message.id,
                 |embed| embed
                     .title("Filmliste")
                     .description(watch_list_string.as_str())
@@ -645,7 +644,7 @@ pub fn handle_watch_list_message_pagination_reaction(
                     // And add the new entry into wait_for_reaction
                     bot_data.wait_for_reaction.push(
                         crate::general_behaviour::WaitingForReaction::WatchListPagination(
-                            message_id,
+                            message,
                             sorted_movie_list,
                             if new_page == 0 {previous_page} else {new_page}
                         )
@@ -667,7 +666,7 @@ pub fn handle_watch_list_message_pagination_reaction(
                     // And add the new entry into wait_for_reaction
                     bot_data.wait_for_reaction.push(
                         crate::general_behaviour::WaitingForReaction::HistoryPagination(
-                            message_id,
+                            message,
                             sorted_movie_list,
                             if new_page == 0 {previous_page} else {new_page}
                         )
@@ -922,8 +921,8 @@ pub fn handle_add_movie_to_watched_after_movie_vote(bot_data: &mut crate::BotDat
 fn remove_set_status_watched_from_wait_for_reaction(bot_data: &mut crate::BotData, previous_message_id: &discord::model::MessageId) {
     // Remove previous wait_for_reaction of previous vote
     for i in 0..bot_data.wait_for_reaction.len() {
-        if let crate::general_behaviour::WaitingForReaction::AddMovieToWatched(some_message_id, _) = bot_data.wait_for_reaction[i] {
-            if *previous_message_id == some_message_id {
+        if let crate::general_behaviour::WaitingForReaction::AddMovieToWatched(some_message, _) = &bot_data.wait_for_reaction[i] {
+            if *previous_message_id == some_message.id {
                 bot_data.wait_for_reaction.remove(i);
                 break;
             }

@@ -11,28 +11,16 @@ pub fn show_history(bot_data: &mut crate::BotData, order: String) {
     let message = bot_data.message.as_ref().expect("Passing message to show_history function failed.");
 
     // First check if there was already a history message waiting for reactions
-    if let Some((idx, message_id)) = bot_data.wait_for_reaction.iter().enumerate()
-        .find_map(|(idx, x)| if let crate::general_behaviour::WaitingForReaction::HistoryPagination(message_id, _, _) = x {
-            Some((idx, message_id))
+    if let Some((idx, message)) = bot_data.wait_for_reaction.iter().enumerate()
+        .find_map(|(idx, x)| if let crate::general_behaviour::WaitingForReaction::HistoryPagination(message, _, _) = x {
+            Some((idx, message))
         } else {
             None
         })
     {
         // If there was, delete the reactions of the bot on that message and remove it from the
         // wait_for_reaction vector
-        let _ = bot_data.bot.delete_reaction(
-            message.channel_id,
-            *message_id,
-            None,
-            discord::model::ReactionEmoji::Unicode("⬅️".to_string())
-        );
-
-        let _ = bot_data.bot.delete_reaction(
-            message.channel_id,
-            *message_id,
-            None,
-            discord::model::ReactionEmoji::Unicode("➡️".to_string())
-        );
+        crate::general_behaviour::remove_reactions_on_message(bot_data, message, vec!["⬅️", "➡️"]);
 
         bot_data.wait_for_reaction.remove(idx);
     }
@@ -121,7 +109,7 @@ pub fn show_history(bot_data: &mut crate::BotData, order: String) {
 
         bot_data.wait_for_reaction.push(
             crate::general_behaviour::WaitingForReaction::WatchListPagination(
-                message.id, 
+                message, 
                 sorted_movie_list_enum,
                 1
             )

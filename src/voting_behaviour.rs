@@ -212,7 +212,7 @@ fn user_already_owns_a_vote(bot_data: &crate::BotData, user_id: discord::model::
  * 
  * Returns Some(message_id) if the message was sent successfully, None otherwise
  */
-pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote) -> Option<discord::model::MessageId> {
+pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote) -> Option<discord::model::Message> {
     let embed_description: String = build_vote_embed_description(vote);
 
     let vote_message = bot_data.bot.send_embed(
@@ -274,7 +274,7 @@ pub fn send_vote_details_message(bot_data: &mut crate::BotData, vote: &mut Vote)
         vote.message_id = vote_message.id;
         bot_data.votes.insert(vote_message.id.0, vote.clone());
 
-        return Some(vote_message.id);
+        return Some(vote_message);
     } else {
         return None;
     }
@@ -351,7 +351,7 @@ pub fn determine_vote_and_send_details_message(bot_data: &mut crate::BotData, ot
 /**
  * Iterates through all options of the vote and removes all reactions of the previous vote message
  */
-fn remove_all_reactions_on_previous_vote(bot_data: &mut crate::BotData, vote: &Vote, channel_and_message_id: (&discord::model::ChannelId, &discord::model::MessageId)) {
+pub fn remove_all_reactions_on_previous_vote(bot_data: &crate::BotData, vote: &Vote, channel_and_message_id: (&discord::model::ChannelId, &discord::model::MessageId)) {
     // Iterate through all options of the vote
     for option in vote.options.iter() {
         let emoji_string = match option {
@@ -374,8 +374,8 @@ fn remove_all_reactions_on_previous_vote(bot_data: &mut crate::BotData, vote: &V
 fn remove_previous_vote_from_wait_for_reaction(bot_data: &mut crate::BotData, previous_message_id: &discord::model::MessageId) {
     // Remove previous wait_for_reaction of previous vote
     for i in 0..bot_data.wait_for_reaction.len() {
-        if let crate::general_behaviour::WaitingForReaction::Vote(some_message_id) = bot_data.wait_for_reaction[i] {
-            if *previous_message_id == some_message_id {
+        if let crate::general_behaviour::WaitingForReaction::Vote(some_message) = &bot_data.wait_for_reaction[i] {
+            if *previous_message_id == some_message.id {
                 bot_data.wait_for_reaction.remove(i);
                 break;
             }
@@ -393,7 +393,12 @@ pub fn update_vote(bot_data: &mut crate::BotData, reaction: &discord::model::Rea
             update_user_choice(&bot_data.bot, vote, reaction);
             update_vote_embed(&bot_data.bot, &reaction.channel_id, vote, &reaction.message_id);
 
-            let _ = bot_data.bot.delete_reaction(reaction.channel_id, reaction.message_id, Some(reaction.user_id), reaction.emoji.clone());
+            let _ = bot_data.bot.delete_reaction(
+                reaction.channel_id, 
+                reaction.message_id, 
+                Some(reaction.user_id), 
+                reaction.emoji.clone()
+            );
         } else {
             send_message::emoji_not_part_of_vote_info(bot_data);
         }
@@ -822,7 +827,7 @@ fn send_random_movie_vote_summary_message(bot_data: &mut crate::BotData, vote: &
                         discord::model::ReactionEmoji::Unicode(String::from("❎"))
                     );
             
-                    bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie_entry.movie.clone()));
+                    bot_data.wait_for_reaction.push(crate::general_behaviour::WaitingForReaction::AddMovieToWatched(message.clone(), movie_entry.movie.clone()));
 
                     // Now return the message id
                     return Some(message.id);

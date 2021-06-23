@@ -604,3 +604,17 @@ pub fn data_saved_successfully(bot_data: &crate::BotData) {
             .color(crate::COLOR_SUCCESS)
         );
 }
+
+/**
+ * Tells the user, that the adding of the movie took too long, which is why it timed out
+ */
+pub fn adding_movie_timed_out_information(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::adding_movie_timed_out_information failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Zeitüberschreitung beim Hinzufügen")
+            .description("Das Hinzufügen hat leider zu lange gedauert. Um andere Nutzer nicht beim Hinzufügen zu blockieren, wird das Hinzufügen nach 30 Sekunden automatisch beendet.")
+            .color(crate::COLOR_INFORMATION)
+        );
+}
