@@ -27,6 +27,7 @@ pub enum Command {
     RandomMovieVote(Option<u32>),
     CloseMovieVote,
     Info,
+    Save,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77,6 +78,7 @@ pub enum SimpleCommand {
     RandomMovieVote,
     CloseMovieVote,
     Info,
+    Save,
     Unknown(String),
 }
 
@@ -104,6 +106,7 @@ impl From<&str> for SimpleCommand {
             RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => Self::RandomMovieVote,
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             INFO => Self::Info,
+            SAVE => Self::Save,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -354,6 +357,7 @@ impl FromStr for Command {
             },
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             INFO => Self::Info,
+            SAVE => Self::Save,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -366,6 +370,7 @@ pub const HELP: &str = "help"; // !help <optional: command> | Shows a list of av
 pub const HELP_SHORT: &str = "h"; // !h <optional: command> | Short form for help
 pub const PREFIX: &str = "prefix"; // !prefix <char> | Sets a custom prefix. Must be a single character
 pub const INFO: &str = "info"; // !info | Shows the version number of the bot
+pub const SAVE: &str = "save"; // !save | Saves the bot data to the file
 
 // Movies
 pub const ADD_MOVIE: &str = "add_movie"; // !add_movie <title|imdb_link> | Adds a movie to the watch list

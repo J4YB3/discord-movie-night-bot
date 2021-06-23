@@ -16,6 +16,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     `info`
     `prefix`
     `quit`
+    `save`
     
     **Filme**
     `add_movie`
@@ -587,5 +588,27 @@ pub fn show_help_info(bot_data: &crate::BotData) {
         message.channel_id,
         "",
         |embed| embed.title(":information_source: Info - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+pub fn show_help_save(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_info function failed.");
+
+    let help_str =
+    "Speichert alle Daten des Bots in die Speicherdatei.
+    
+    **Nutzung**
+    !save
+    
+    **Beispiel**
+    !save
+    
+    **Aliase**
+    `save`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Save - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }

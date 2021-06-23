@@ -590,3 +590,17 @@ pub fn write_error(bot_data: &crate::BotData, error: std::io::Error) {
             .color(crate::COLOR_ERROR)
         );
 }
+
+/**
+ * Shows an information message to the user stating, that the data has been saved successfully
+ */
+pub fn data_saved_successfully(bot_data: &crate::BotData) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::data_saved_successfully failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Daten erfolgreich gespeichert")
+            .description("Meine Daten wurden erfolgreich in die Speicherdatei geschrieben.")
+            .color(crate::COLOR_SUCCESS)
+        );
+}

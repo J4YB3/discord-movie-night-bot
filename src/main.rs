@@ -330,6 +330,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::RandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
             SimpleCommand::CloseMovieVote => help_behaviour::show_help_close_movie_vote(bot_data),
             SimpleCommand::Info => help_behaviour::show_help_info(bot_data),
+            SimpleCommand::Save => help_behaviour::show_help_save(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -364,6 +365,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         RandomMovieVote(optional_limit) => voting_behaviour::create_random_movie_vote(bot_data, optional_limit),
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
+        Save => serde_behaviour::store_bot_data(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }

@@ -22,6 +22,8 @@ pub fn store_bot_data(bot_data: &crate::BotData) {
 
             if let Err(error) = file.write_all(serialized_bot_data.as_bytes()) {
                 send_message::write_error(bot_data, error);
+            } else {
+                send_message::data_saved_successfully(bot_data);
             }
         },
         Err(error) => send_message::open_file_error(bot_data, error)
