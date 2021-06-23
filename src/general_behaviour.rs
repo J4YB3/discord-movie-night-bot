@@ -62,6 +62,24 @@ pub fn parse_imdb_link_id(hyperlink: String) -> Option<String> {
 }
 
 /**
+ * Takes an TMDb link and extracts the TMDb ID
+ */
+pub fn parse_tmdb_link_id(hyperlink: String) -> Option<u64> {
+    // Example link: https://www.themoviedb.org/movie/9806-the-incredibles
+    if let Some(regex_match) = Regex::new(r"/[0-9]*-").unwrap().find(hyperlink.as_str()) {
+        let match_str = regex_match.as_str();
+        // Remove the slash and the hyphen for return value
+        let match_string = match_str[1..match_str.len() - 1].to_string();
+
+        if let Ok(id) = match_string.parse::<u64>() {
+            return Some(id);
+        }
+    }
+
+    None
+}
+
+/**
  * Takes the budget of a movie and formats it to easy read format (169 mio.)
  */
 pub fn format_budget(budget: u64) -> String {

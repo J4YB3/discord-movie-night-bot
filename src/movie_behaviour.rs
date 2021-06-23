@@ -247,7 +247,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
     }
 
     // Initiate the search
-    let movie = if title_or_link.contains("imdb.com/") {
+    let search_result = if title_or_link.contains("imdb.com/") {
         if let Some(imdb_id) = parse_imdb_link_id(title_or_link.to_string()) {
             let result = bot_data.tmdb
             .find()
@@ -269,6 +269,20 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
         } else {
             SearchResult::FaultyIMDBLink
         }
+    } else if title_or_link.contains("themoviedb.org/") {
+        if let Some(tmdb_id) = parse_tmdb_link_id(title_or_link.to_string()) {
+            let fetch_result = bot_data.tmdb
+            .fetch()
+            .id(tmdb_id)
+            .execute();
+
+            match fetch_result {
+                Ok(result) => SearchResult::Movie(result),
+                Err(error) => SearchResult::Error(format!("{}", error))
+            }
+        } else {
+            SearchResult::FaultyIMDBLink
+        }
     } else {
         let title = title_or_link;
         let result = bot_data.tmdb
@@ -282,6 +296,8 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                     SearchResult::NoResults
                 } else {
                     use std::cmp::Ordering::Equal;
+                    
+                    // Try to find an exact title match
                     let lowercase_title = title.to_lowercase();
                     let exact_match_option = result.results.iter()
                         .filter(|x| x.title.to_lowercase() == lowercase_title 
@@ -292,7 +308,6 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                     
                     if let Some(exact_match) = exact_match_option {
                         let fetch_result = exact_match.fetch(&bot_data.tmdb);
-    
                         match fetch_result {
                             Ok(result) => SearchResult::Movie(result),
                             Err(error) => SearchResult::Error(format!("{}", error))
@@ -322,7 +337,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
         }
     };
 
-    match movie {
+    match search_result {
         SearchResult::Movie(first_movie) => {
             // If the user wants to add this movie, check if it is already in the watch list
             if add_movie {
@@ -395,7 +410,7 @@ pub fn search_movie(bot_data: &mut crate::BotData, title_or_link: &str, add_movi
                 |embed| embed
                 .title("Link fehlerhaft")
                 .description(
-                    format!("Es sieht so aus als ob der angegebene Link fehlerhaft war. Bitte versichere dich, dass der Link eine korrekte IMDb-ID enthält.")
+                    format!("Es sieht so aus als ob der angegebene Link fehlerhaft war. Bitte versichere dich, dass der Link eine korrekte IMDb-ID oder TMDb-ID enthält.")
                     .as_str()
                 )
                 .color(COLOR_ERROR)
