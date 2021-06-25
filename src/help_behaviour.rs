@@ -646,6 +646,6 @@ pub fn show_help_count_movies(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
         message.channel_id,
         "",
-        |embed| embed.title(":information_source: Save - Hilfe").description(help_str).color(COLOR_INFORMATION)
+        |embed| embed.title(":information_source: Count - Hilfe").description(help_str).color(COLOR_INFORMATION)
     );
 }
