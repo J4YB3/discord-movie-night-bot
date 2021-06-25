@@ -916,6 +916,28 @@ pub fn handle_add_movie_to_watched_after_movie_vote(bot_data: &mut crate::BotDat
 }
 
 /**
+ * Counts the movies in the watch list that have a watch list status, and belong to the user
+ * that sent the last message, and sends a message containing the information.
+ */
+pub fn count_movies(bot_data: &crate::BotData) {
+    let author_id = bot_data.message.as_ref().expect("Passing of message to count_movies function failed.").author.id;
+
+    let count = bot_data.watch_list.iter()
+        .filter(|(_, entry)|
+            // Only count the movie if it has a watch list status and was added by this user
+            if entry.status.is_watch_list_status() 
+                && entry.user_id == author_id {
+                true
+            } else {
+                false
+            }
+        )
+        .count();
+    
+    send_message::current_user_movie_count(bot_data, count);
+}
+
+/**
  * Finds the previous vote message in the wait_for_reaction vector of bot_data and removes the entry
  */
 fn remove_set_status_watched_from_wait_for_reaction(bot_data: &mut crate::BotData, previous_message_id: &discord::model::MessageId) {

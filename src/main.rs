@@ -26,7 +26,7 @@ pub struct BotData {
     tmdb: TMDb,
 
     #[serde(default)]
-    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
+    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>, // Keys are the internal movie ids
     
     #[serde(skip)]
     #[serde(default)]
@@ -89,7 +89,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.5";
+const VERSION: &str = "0.5.6";
 
 fn main() {
     let bot = get_default_discord_struct();
@@ -141,7 +141,7 @@ fn main() {
                     next_movie_id: 0,
                     server_id: ServerId(0),
                     server_roles: vec![],
-                    custom_prefix: '!',
+                    custom_prefix: '.',
                     tmdb: tmdb,
                     wait_for_reaction: vec![],
                     votes: HashMap::new(),
@@ -383,7 +383,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::ShowWatchlist => help_behaviour::show_help_watchlist(bot_data),
             SimpleCommand::Prefix => help_behaviour::show_help_prefix(bot_data),
             SimpleCommand::History => help_behaviour::show_help_history(bot_data),
-            SimpleCommand::Status => help_behaviour::show_help_set_status(bot_data),
+            SimpleCommand::Status => help_behaviour::show_help_status(bot_data),
             SimpleCommand::Unavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
             SimpleCommand::Watched => help_behaviour::show_help_set_status_watched(bot_data),
             SimpleCommand::ShowMovie => help_behaviour::show_help_show_movie(bot_data),
@@ -397,6 +397,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::CloseMovieVote => help_behaviour::show_help_close_movie_vote(bot_data),
             SimpleCommand::Info => help_behaviour::show_help_info(bot_data),
             SimpleCommand::Save => help_behaviour::show_help_save(bot_data),
+            SimpleCommand::Count => help_behaviour::show_help_count_movies(bot_data),
             SimpleCommand::Unknown(parameters) => {
                 let _ = bot_data.bot.send_embed(
                     bot_data.message.clone().unwrap().channel_id,
@@ -432,6 +433,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
         Save => serde_behaviour::store_bot_data(bot_data),
+        Count => movie_behaviour::count_movies(bot_data),
         Quit => todo!("What needs to happen when the Quit command is received?"),
     }
 }
@@ -454,7 +456,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         PrefixIsNotAChar => help_behaviour::show_help_prefix(bot_data),
         WrongArgumentForWatchList => help_behaviour::show_help_watchlist(bot_data),
         WrongArgumentForHistory => help_behaviour::show_help_history(bot_data),
-        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => help_behaviour::show_help_set_status(bot_data),
+        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => help_behaviour::show_help_status(bot_data),
         NoArgumentForUnavailable | WrongArgumentForUnavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
         NotEnoughArgumentsForWatched | WrongArgumentsForWatched => help_behaviour::show_help_set_status_watched(bot_data),
         NoArgumentsForShowMovie => help_behaviour::show_help_show_movie(bot_data),

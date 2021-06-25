@@ -618,3 +618,25 @@ pub fn adding_movie_timed_out_information(bot_data: &crate::BotData) {
             .color(crate::COLOR_INFORMATION)
         );
 }
+
+/**
+ * Sends an information message about how many movies with watch list status the user has added 
+ */
+pub fn current_user_movie_count(bot_data: &crate::BotData, current_movie_count: usize) {
+    let _ = bot_data.bot.send_embed(
+        bot_data.message.as_ref().expect("Passing message to send_message::current_user_movie_count failed.").channel_id,
+        "",
+        |embed| embed
+            .title("Aktuelle Filmanzahl")
+            .description(
+                format!("Du hast aktuell `{}` {} hinzugefügt. Du darfst maximal `{}` {} hinzufügen.",
+                    current_movie_count,
+                    if current_movie_count == 1 { "Film" } else { "Filme" },
+                    bot_data.movie_limit_per_user,
+                    if bot_data.movie_limit_per_user == 1 { "Film" } else { "Filme" }
+                )
+                .as_str()
+            )
+            .color(crate::COLOR_INFORMATION)
+        );
+}

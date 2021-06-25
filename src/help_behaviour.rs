@@ -20,6 +20,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     
     **Filme**
     `add_movie`
+    `count`
     `history`
     `movie_limit`
     `remove_movie`
@@ -598,6 +599,9 @@ pub fn show_help_info(bot_data: &crate::BotData) {
     );
 }
 
+/**
+ * Shows a help message about the save command
+ */
 pub fn show_help_save(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_info function failed.");
 
@@ -612,6 +616,32 @@ pub fn show_help_save(bot_data: &crate::BotData) {
     
     **Aliase**
     `save`";
+
+    let _ = bot_data.bot.send_embed(
+        message.channel_id,
+        "",
+        |embed| embed.title(":information_source: Save - Hilfe").description(help_str).color(COLOR_INFORMATION)
+    );
+}
+
+/**
+ * Shows a help message about the count command
+ */
+pub fn show_help_count_movies(bot_data: &crate::BotData) {
+    let message = bot_data.message.as_ref().expect("Passing message to show_help_count_movies function failed.");
+
+    let help_str =
+    "Zeigt dir an, wie viele Filme auf der Filmliste aktuell von dir sind.
+    
+    **Nutzung**
+    !count
+    
+    **Beispiel**
+    !count
+    !ct
+    
+    **Aliase**
+    `count`, `ct`";
 
     let _ = bot_data.bot.send_embed(
         message.channel_id,

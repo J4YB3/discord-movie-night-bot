@@ -28,6 +28,7 @@ pub enum Command {
     CloseMovieVote,
     Info,
     Save,
+    Count,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -79,6 +80,7 @@ pub enum SimpleCommand {
     CloseMovieVote,
     Info,
     Save,
+    Count,
     Unknown(String),
 }
 
@@ -107,6 +109,7 @@ impl From<&str> for SimpleCommand {
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             INFO => Self::Info,
             SAVE => Self::Save,
+            COUNT_MOVIES | COUNT_MOVIES_SHORT => Self::Count,
             st => Self::Unknown(String::from(st)),
         }
     }
@@ -358,6 +361,7 @@ impl FromStr for Command {
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             INFO => Self::Info,
             SAVE => Self::Save,
+            COUNT_MOVIES | COUNT_MOVIES_SHORT => Self::Count,
             _ => return Err(ParseCommandError::UnknownCommand),
         })
     }
@@ -383,7 +387,7 @@ pub const MOVIE_LIMIT: &str = "movie_limit"; // !movie_limit <optional: number> 
 pub const MOVIE_LIMIT_SHORT: &str = "ml"; // !ml <optional: number> | Short form for movie_limit
 pub const SHOW_HISTORY: &str = "history"; // !history <optional: order> | Shows a list of all movies that have been watched already or that have the status 'removed'
 pub const SHOW_HISTORY_SHORT: &str = "hs"; // !h <optional: order> | Short form for history
-pub const SET_STATUS: &str = "set_status"; // !set_status <id> <movie_status> | Sets the status of a movie
+pub const SET_STATUS: &str = "status"; // !set_status <id> <movie_status> | Sets the status of a movie
 pub const SET_STATUS_SHORT: &str = "st"; // !st <id> <movie_status> | Short form for set_status
 pub const SET_STATUS_UNAVAILABLE: &str = "unavailable"; // !unavailable <id> | Sets the given movie with id to the unavailable status
 pub const SET_STATUS_UNAVAILABLE_SHORT: &str = "un"; // !un <id> | Short form for unavailable
@@ -393,6 +397,8 @@ pub const SHOW_MOVIE: &str = "show_movie"; // !show_movie <title|id> | Shows inf
 pub const SHOW_MOVIE_SHORT: &str = "sm"; // !sm <title|id> | Short form for show_movie
 pub const SEARCH_MOVIE: &str = "search_movie"; // !search_movie <title|imdb_link> | Searches TMDb for the given movie and displays its information
 pub const SEARCH_MOVIE_SHORT: &str = "search"; // !search <title|imdb_link> | Short form for search_movie
+pub const COUNT_MOVIES: &str = "count"; // !count | Counts the amount of movies the user added
+pub const COUNT_MOVIES_SHORT: &str = "ct"; // !ct | Short form for count
 
 // Voting
 pub const CREATE_VOTE: &str = "create_vote"; // !create_vote <title>|<option1>|<option2>|... | Creates a new vote and displays its information
