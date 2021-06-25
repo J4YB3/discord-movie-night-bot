@@ -24,7 +24,7 @@ pub fn show_help(bot_data: &crate::BotData) {
     `movie_limit`
     `remove_movie`
     `search_movie`
-    `set_status`
+    `status`
     `show_movie`
     `unavailable`
     `watched`
@@ -239,7 +239,7 @@ pub fn show_help_history(bot_data: &crate::BotData) {
 /**
  * Shows help on the set_status command
  */
-pub fn show_help_set_status(bot_data: &crate::BotData) {
+pub fn show_help_status(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_set_status function failed.");
 
     let help_str =
@@ -249,6 +249,12 @@ pub fn show_help_set_status(bot_data: &crate::BotData) {
     Die Status `Watched` und `Removed` führen dazu, dass ein Film von der Watch list entfernt wird.
     Der Status `Unavailable` wird bei der Zählung der Filme pro Nutzer ignoriert.
     
+    :white_large_square: Noch nicht geschaut (NotWatched)
+    :white_check_mark: Geschaut (Watched)
+    :orange_square: Nicht verfügbar (Unavailable)
+    :recycle: Erneut schauen (Rewatch)
+    :red_square: Entfernt (Removed)
+
     **Nutzung**
     !set_status <ID> <Status>
     
