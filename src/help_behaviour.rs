@@ -104,14 +104,15 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
     let message = bot_data.message.as_ref().expect("Passing message to show_help_add_movie function failed.");
 
     let help_str = 
-    "Sucht nach einem Film auf TMDb und fügt ihn zur Liste hinzu, wenn dieser vom Nutzer bestätigt wird.
+    r"Sucht nach einem Film auf TMDb und fügt ihn zur Liste hinzu, wenn dieser vom Nutzer bestätigt wird. Es kann auch ein IMDb-Link oder ein TMDb-Link angegeben werden.
     
     **Nutzung**
-    !add_movie <Filmtitel | IMDb Link>
+    !add_movie <Filmtitel | IMDb Link | TMDb Link>
     
     **Beispiel**
     !add_movie Forrest Gump
-    !add_movie https://www.imdb.com/title/tt9760504/?ref_=fn_al_tt_1
+    !add\_movie https://www.imdb.com/title/tt9760504/?ref\_=fn\_al\_tt\_1
+    !add_movie https://www.themoviedb.org/movie/9806-the-incredibles
     
     **Aliase**
     `add_movie`, `am`";

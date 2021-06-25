@@ -89,7 +89,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.4";
+const VERSION: &str = "0.5.5";
 
 fn main() {
     let bot = get_default_discord_struct();
