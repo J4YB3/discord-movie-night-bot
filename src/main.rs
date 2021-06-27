@@ -89,7 +89,7 @@ const COLOR_BOT: u64 = 0xe91e63; // color of the bot role (pink)
 const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 
 const MAX_ENTRIES_PER_PAGE: usize = 10;
-const VERSION: &str = "0.5.7";
+const VERSION: &str = "0.5.8";
 
 fn main() {
     let bot = get_default_discord_struct();
@@ -164,11 +164,14 @@ fn main() {
 
     loop {
         // The last save was more than an hour ago
-        if something_changed && last_save.elapsed() >= one_hour {
-            // So save the bot_data and reset the last_save time
-            serde_behaviour::store_bot_data(&bot_data);
+        if last_save.elapsed() >= one_hour {
             last_save = std::time::Instant::now();
-            something_changed = false;
+
+            if something_changed {
+                // So save the bot_data and reset the last_save time
+                serde_behaviour::store_bot_data(&bot_data);
+                something_changed = false;
+            }
         }
 
         // See if an add_movie command is waiting too long
