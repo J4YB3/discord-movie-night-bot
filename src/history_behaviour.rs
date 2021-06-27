@@ -108,7 +108,7 @@ pub fn show_history(bot_data: &mut crate::BotData, order: String) {
         );
 
         bot_data.wait_for_reaction.push(
-            crate::general_behaviour::WaitingForReaction::WatchListPagination(
+            crate::general_behaviour::WaitingForReaction::HistoryPagination(
                 message, 
                 sorted_movie_list_enum,
                 1
