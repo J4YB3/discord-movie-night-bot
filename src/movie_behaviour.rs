@@ -47,7 +47,7 @@ impl MovieStatus {
      */
     pub fn is_watch_list_status(&self) -> bool {
         match self {
-            MovieStatus::NotWatched | MovieStatus::Rewatch | MovieStatus::Unavailable => true,
+            MovieStatus::NotWatched | MovieStatus::Rewatch => true,
             _ => false,
         }
     }
