@@ -683,7 +683,7 @@ pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: O
 
     // Swap the random movies with earliest movies by chance. Skips the earliest movies that already are in the vote
     for id in random_movies.iter_mut() {
-        if !removed_earliest_ids.contains(id) && rng.gen_bool(0.4) {
+        if !removed_earliest_ids.contains(id) && rng.gen_bool(0.2) {
             let earliest_movie = earliest_movie_ids_vec.pop();
 
             match earliest_movie {
