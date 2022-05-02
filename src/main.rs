@@ -212,7 +212,7 @@ fn main() {
 					println!("[Ready] Reconnected successfully.");
 				}
 				if let discord::Error::Closed(..) = err {
-					break;
+					println!("Discord Error Closed");
 				}
 				continue;
 			}
