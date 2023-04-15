@@ -7,7 +7,7 @@ use crate::{COLOR_BOT};
 /**
  * Formats the watch list hash map as a movie history and sends it as an embedded message
  */
-pub fn show_history(bot_data: &mut crate::BotData, order: String, reverse: Bool) {
+pub fn show_history(bot_data: &mut crate::BotData, order: String, reverse: bool) {
     let message = bot_data.message.as_ref().expect("Passing message to show_history function failed.");
 
     // First check if there was already a history message waiting for reactions
@@ -64,7 +64,7 @@ pub fn show_history(bot_data: &mut crate::BotData, order: String, reverse: Bool)
                             .expect("Movie did not have a watched_or_removed_timestamp in show_history")
                         )
             );
-            if eq(reverse,true) {
+            if reverse {
                 date_sorted_history = date_sorted_history.reverse()
             }
             total_pages = (date_sorted_history.len() as f64 / crate::MAX_ENTRIES_PER_PAGE as f64).ceil() as usize;
