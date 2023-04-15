@@ -9,7 +9,6 @@ Since I can't provide a web server for you to host this bot on, you need to foll
 1. Attach a bot to the created application under `Settings > Bot` 
 1. Copy the Bot-Token to your clipboard
 1. Add the token to the source files
-    1. Create a directory named `src` inside the `external_data` directory
     1. Create the file `lib.rs` in the `external_data/src` directory
     1. To this file add the line `pub static DISCORD_TOKEN: &'static str = "<YOUR_TOKEN>";` where you replace `<YOUR_TOKEN>` with the previously copied token. Note that the double quotes are necessary.
 1. Get an TMDb API key
