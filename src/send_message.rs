@@ -88,6 +88,7 @@ pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviou
                 .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
                 .field("Budget", movie_entry.movie.budget.as_str(), true)
                 .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
+                .field("Watchlist-ID", movie_behaviour::get_movie_id_in_watch_list(&movie_entry.movie.movie_title, &bot_data.watch_list), true)
             )
             .footer(|footer| footer
                 .text(format!("{}", if ask_confirmation {"Meintest du diesen Film?"} else {""}).as_str())
