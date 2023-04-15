@@ -417,7 +417,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             }
         },
         Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
-        History(order) => history_behaviour::show_history(bot_data, order),
+        History(order) => history_behaviour::show_history(bot_data, order, true),
         SetStatus(id, status) => movie_behaviour::set_status(bot_data, id, status),
         Unavailable(id) => movie_behaviour::set_status(bot_data, id, "Unavailable".to_string()),
         Watched(id, date) => movie_behaviour::set_status_watched(bot_data, id, date),
