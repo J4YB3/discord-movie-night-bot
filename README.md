@@ -15,7 +15,7 @@ Since I can't provide a web server for you to host this bot on, you need to foll
     1. Create an TMDb account, if you don't already have one.
     1. Under profile->settings->API create an API key, accepting the terms of use and filling in your personal data into the form.
     1. Once you have created the key, add this line to the file as well, replacing <API_KEY> with your API key: `pub static TMDB_API_KEY: &'static str = "<API_KEY>"`
-    1. In your TMDB Profile there should also be an API Read access token. You also need to provide this in the `lib.rs` file under `pub static TMDB_API_READ_ACCESS_TOKEN: &'static str = "<API_READ_ACCESS_TOKEN>";
+    1. In your TMDB Profile there should also be an API Read access token. You also need to provide this in the `lib.rs` file under `pub static TMDB_API_READ_ACCESS_TOKEN: &'static str = "<API_READ_ACCESS_TOKEN>";`
 
 In order to compile an executable file you need to have the programming language Rust and its dependencies installed on your system. Because you need to generate your own token and API key I can not provide an executable.
 
