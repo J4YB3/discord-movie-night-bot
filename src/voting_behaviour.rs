@@ -331,7 +331,7 @@ fn build_vote_embed_description(vote: &Vote) -> String {
             }
             VoteOptionEnum::MovieVoteOption(movie_option) => description.push_str(
                 format!(
-                    "\n\n`{}` {} - ({}) [{}]({})",
+                    "\n\n`{}` {} - `(ID {})` [{}]({})",
                     movie_option.votes.len(),
                     movie_option.emoji,
                     movie_option.id,
