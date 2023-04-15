@@ -1,6 +1,6 @@
 use rand::distributions::{Distribution, Uniform};
 use std::collections::HashSet;
-use crate::send_message;
+use crate::{send_message, movie_behaviour::get_movie_id_in_watch_list};
 use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -11,6 +11,7 @@ pub enum VoteOptionEnum {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VoteOption<T> {
+    id: u32,
     emoji: String,
     cargo: T,
     votes: Vec<discord::model::UserId>,
@@ -111,6 +112,7 @@ pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<St
                             vote_options.push(
                                 VoteOptionEnum::MovieVoteOption(
                                     VoteOption::<Movie> {
+                                        id: movie_id,
                                         emoji: emojis[emoji_idx].clone(),
                                         cargo: watch_list_entry.movie.clone(),
                                         votes: Vec::new(),
@@ -136,6 +138,7 @@ pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<St
                             vote_options.push(
                                 VoteOptionEnum::MovieVoteOption(
                                     VoteOption::<Movie> {
+                                        id: movie_id,
                                         emoji: emojis[emoji_idx].clone(),
                                         cargo: watch_list_entry.movie.clone(),
                                         votes: Vec::new(),
@@ -156,6 +159,7 @@ pub fn create_vote(bot_data: &mut crate::BotData, title: String, options: Vec<St
                     vote_options.push(
                         VoteOptionEnum::GeneralVoteOption(
                             VoteOption::<String> {
+                                id: "0", // ID only used as of now for votes of the movie kind - in future this could be a UUID
                                 emoji: emojis[emoji_idx].clone(),
                                 cargo: option,
                                 votes: Vec::new(),
@@ -295,11 +299,12 @@ fn build_vote_embed_description(vote: &Vote) -> String {
             },
             VoteOptionEnum::MovieVoteOption(movie_option) => {
                 description.push_str(
-                    format!("\n\n`{}` {} - [{}]({})", 
+                    format!("\n\n`{}` {} - [{}]({}) - `{}`", 
                         movie_option.votes.len(), 
                         movie_option.emoji, 
-                        movie_option.cargo.movie_title, 
-                        crate::movie_behaviour::get_movie_link(movie_option.cargo.tmdb_id, false)
+                        movie_option.cargo.movie_title,
+                        crate::movie_behaviour::get_movie_link(movie_option.cargo.tmdb_id, false),
+                        movie_option.id
                     ).as_str()
                 )
             }
