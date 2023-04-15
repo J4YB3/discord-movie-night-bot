@@ -331,12 +331,12 @@ fn build_vote_embed_description(vote: &Vote) -> String {
             }
             VoteOptionEnum::MovieVoteOption(movie_option) => description.push_str(
                 format!(
-                    "\n\n`{}` {} - [{}]({}) - `{}`",
+                    "\n\n`{}` {} - ({}) [{}]({})",
                     movie_option.votes.len(),
                     movie_option.emoji,
+                    movie_option.id,
                     movie_option.cargo.movie_title,
                     crate::movie_behaviour::get_movie_link(movie_option.cargo.tmdb_id, false),
-                    movie_option.id
                 )
                 .as_str(),
             ),
