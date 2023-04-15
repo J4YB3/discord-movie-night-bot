@@ -1,19 +1,19 @@
 extern crate external_data;
-use discord::{self, Discord as Discord, model as Model, State, model::ServerId};
-use std::{collections::HashMap, str::FromStr};
 use commands::{Command, ParseCommandError, SimpleCommand};
-use tmdb::{themoviedb::*};
-use serde::{Serialize, Deserialize};
+use discord::{self, model as Model, model::ServerId, Discord, State};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, str::FromStr};
+use tmdb::themoviedb::*;
 
 mod commands;
-mod movie_behaviour;
 mod general_behaviour;
-mod voting_behaviour;
-mod send_message;
 mod help_behaviour;
 mod history_behaviour;
-mod watch_list_behaviour;
+mod movie_behaviour;
+mod send_message;
 mod serde_behaviour;
+mod voting_behaviour;
+mod watch_list_behaviour;
 
 #[derive(Serialize, Deserialize)]
 pub struct BotData {
@@ -27,14 +27,14 @@ pub struct BotData {
 
     #[serde(default)]
     watch_list: HashMap<u32, movie_behaviour::WatchListEntry>, // Keys are the internal movie ids
-    
+
     #[serde(skip)]
     #[serde(default)]
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
-    
+
     #[serde(default)]
     votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
-    
+
     #[serde(default = "get_default_bot_user")]
     bot_user: discord::model::User,
 
@@ -74,7 +74,7 @@ fn get_default_bot_user() -> discord::model::User {
         name: String::from("Movie Night Bot"),
         discriminator: 7301,
         avatar: Some(String::from("7c8c90ae23711af29b91880b44fdfd4a")),
-        bot: true
+        bot: true,
     }
 }
 
@@ -118,7 +118,7 @@ fn main() {
                 bot: state_user.bot,
             };
             bot_data.tmdb = tmdb;
-        },
+        }
         Err(string) => {
             println!("{}\n", string);
             println!("WARNING: New BotData created, because file was empty or an error occured!");
@@ -154,7 +154,7 @@ fn main() {
                 println!("Bot is shutting down now.");
                 return;
             }
-        },
+        }
     };
 
     let thirty_seconds = std::time::Duration::from_secs(30);
@@ -179,20 +179,29 @@ fn main() {
             if start_time.elapsed() >= thirty_seconds {
                 // If so, remove the reactions from the message and remove the
                 // add_movie enum from waiting_for_reaction
-                let result = bot_data.wait_for_reaction.iter()
-                    .enumerate()
-                    .find_map(|(idx, entry)| 
-                        if let general_behaviour::WaitingForReaction::AddMovie(message, _) = entry {
-                            Some((idx, message))
-                        } else {
-                            None
-                        }
-                    );
-                
+                let result =
+                    bot_data
+                        .wait_for_reaction
+                        .iter()
+                        .enumerate()
+                        .find_map(|(idx, entry)| {
+                            if let general_behaviour::WaitingForReaction::AddMovie(message, _) =
+                                entry
+                            {
+                                Some((idx, message))
+                            } else {
+                                None
+                            }
+                        });
+
                 // If an entry that matches was found
                 if let Some((index, message)) = result {
                     // Remove the reactions
-                    general_behaviour::remove_reactions_on_message(&bot_data, message, vec!["✅", "❎"]);
+                    general_behaviour::remove_reactions_on_message(
+                        &bot_data,
+                        message,
+                        vec!["✅", "❎"],
+                    );
                     bot_data.wait_for_reaction.remove(index);
 
                     send_message::adding_movie_timed_out_information(&bot_data);
@@ -201,22 +210,22 @@ fn main() {
         }
 
         let event = match connection.recv_event() {
-			Ok(event) => event,
-			Err(err) => {
-				println!("[Warning] Receive error: {:?}", err);
-				if let discord::Error::WebSocket(..) = err {
-					// Handle the websocket connection being dropped
-					let (_connection, ready_event) = 
+            Ok(event) => event,
+            Err(err) => {
+                println!("[Warning] Receive error: {:?}", err);
+                if let discord::Error::WebSocket(..) = err {
+                    // Handle the websocket connection being dropped
+                    let (_connection, ready_event) =
                         bot_data.bot.connect().expect("connect failed");
-					state = State::new(ready_event);
-					println!("[Ready] Reconnected successfully.");
-				}
-				if let discord::Error::Closed(..) = err {
-					println!("Discord Error Closed");
-				}
-				continue;
-			}
-		};
+                    state = State::new(ready_event);
+                    println!("[Ready] Reconnected successfully.");
+                }
+                if let discord::Error::Closed(..) = err {
+                    println!("Discord Error Closed");
+                }
+                continue;
+            }
+        };
 
         state.update(&event);
 
@@ -239,17 +248,25 @@ fn main() {
                 println!("Received message: {:#?}", message.content);
 
                 // Handle the quit command first, since it needs to be within main (because of loop break)
-                if message.content == String::from(format!("{}{}", bot_data.custom_prefix, crate::commands::QUIT)) {
+                if message.content
+                    == String::from(format!(
+                        "{}{}",
+                        bot_data.custom_prefix,
+                        crate::commands::QUIT
+                    ))
+                {
                     bot_data.message = Some(message.clone());
                     serde_behaviour::store_bot_data(&bot_data);
 
-                    general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(&bot_data);
-
-                    let _ = bot_data.bot.send_embed(
-                        message.channel_id,
-                        "",
-                        |embed| embed.description("Ich beende mich dann mal. Tschüss. :wave:").color(COLOR_BOT)
+                    general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(
+                        &bot_data,
                     );
+
+                    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
+                        embed
+                            .description("Ich beende mich dann mal. Tschüss. :wave:")
+                            .color(COLOR_BOT)
+                    });
                     break;
                 }
                 // Handle all other messages that start with the prefix
@@ -261,7 +278,7 @@ fn main() {
                     call_behaviour(&mut bot_data);
                     something_changed = true;
                 }
-            },
+            }
             Model::Event::ReactionAdd(reaction) => {
                 use general_behaviour::WaitingForReaction;
                 // If the reaction is from the bot itself skip this event
@@ -278,7 +295,11 @@ fn main() {
                             WaitingForReaction::AddMovie(message, new_entry) => {
                                 // If the reaction happened to the correct message
                                 if reaction.message_id == message.id {
-                                    movie_behaviour::add_movie_by_reaction(&mut bot_data, &reaction, &new_entry);
+                                    movie_behaviour::add_movie_by_reaction(
+                                        &mut bot_data,
+                                        &reaction,
+                                        &new_entry,
+                                    );
 
                                     // The correct message was found and has therefore now been reacted to
                                     // Remove the wait_for_reaction element from bot_data and break the loop
@@ -286,11 +307,15 @@ fn main() {
                                     something_changed = true;
                                     break;
                                 }
-                            },
+                            }
                             WaitingForReaction::Vote(message) => {
                                 // If the reaction happened to the correct message
                                 if reaction.message_id == message.id {
-                                    voting_behaviour::update_vote(&mut bot_data, &reaction, &message.id.0);
+                                    voting_behaviour::update_vote(
+                                        &mut bot_data,
+                                        &reaction,
+                                        &message.id.0,
+                                    );
 
                                     // Vote does not get removed from the wait_for_reaction vector since
                                     // this will only happen once the vote gets closed by the user
@@ -298,13 +323,13 @@ fn main() {
                                     something_changed = true;
                                     break;
                                 }
-                            },
+                            }
                             WaitingForReaction::AddMovieToWatched(message, movie) => {
                                 if reaction.message_id == message.id {
                                     movie_behaviour::handle_add_movie_to_watched_after_movie_vote(
-                                        &mut bot_data, 
-                                        &reaction, 
-                                        &movie
+                                        &mut bot_data,
+                                        &reaction,
+                                        &movie,
                                     );
 
                                     // Vote does not get removed from the wait_for_reaction vector since
@@ -313,27 +338,35 @@ fn main() {
                                     something_changed = true;
                                     break;
                                 }
-                            },
-                            WaitingForReaction::WatchListPagination(message, sorted_watch_list_enum, curr_page) => {
+                            }
+                            WaitingForReaction::WatchListPagination(
+                                message,
+                                sorted_watch_list_enum,
+                                curr_page,
+                            ) => {
                                 if reaction.message_id == message.id {
                                     movie_behaviour::handle_watch_list_message_pagination_reaction(
                                         &mut bot_data,
-                                        message, 
-                                        sorted_watch_list_enum, 
-                                        curr_page, 
-                                        &reaction
+                                        message,
+                                        sorted_watch_list_enum,
+                                        curr_page,
+                                        &reaction,
                                     );
                                     something_changed = true;
                                 }
-                            },
-                            WaitingForReaction::HistoryPagination(message, sorted_history_enum, curr_page) => {
+                            }
+                            WaitingForReaction::HistoryPagination(
+                                message,
+                                sorted_history_enum,
+                                curr_page,
+                            ) => {
                                 if reaction.message_id == message.id {
                                     movie_behaviour::handle_watch_list_message_pagination_reaction(
                                         &mut bot_data,
-                                        message, 
-                                        sorted_history_enum, 
-                                        curr_page, 
-                                        &reaction
+                                        message,
+                                        sorted_history_enum,
+                                        curr_page,
+                                        &reaction,
                                     );
                                     something_changed = true;
                                 }
@@ -341,8 +374,8 @@ fn main() {
                         }
                     }
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -355,7 +388,6 @@ fn main() {
  */
 #[allow(unused_assignments)]
 fn call_behaviour(bot_data: &mut BotData) {
-    
     if bot_data.message.is_none() {
         return;
     }
@@ -375,7 +407,7 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         RemoveMovieById(id) => movie_behaviour::remove_movie_by_id(bot_data, id),
         RemoveMovieByTitle(title) => {
             movie_behaviour::remove_movie_by_title(bot_data, title.as_str())
-        },
+        }
         ShowWatchlist(order) => watch_list_behaviour::show_watch_list(bot_data, order),
         Help(simple_command) => match simple_command {
             SimpleCommand::General => help_behaviour::show_help(bot_data),
@@ -387,7 +419,9 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Prefix => help_behaviour::show_help_prefix(bot_data),
             SimpleCommand::History => help_behaviour::show_help_history(bot_data),
             SimpleCommand::Status => help_behaviour::show_help_status(bot_data),
-            SimpleCommand::Unavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
+            SimpleCommand::Unavailable => {
+                help_behaviour::show_help_set_status_unavailable(bot_data)
+            }
             SimpleCommand::Watched => help_behaviour::show_help_set_status_watched(bot_data),
             SimpleCommand::ShowMovie => help_behaviour::show_help_show_movie(bot_data),
             SimpleCommand::Search => help_behaviour::show_help_search_movie(bot_data),
@@ -424,15 +458,21 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         ShowMovieById(id) => movie_behaviour::show_movie_by_id(bot_data, id),
         ShowMovieByTitle(title) => movie_behaviour::show_movie_by_title(bot_data, title),
         SearchMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), false),
-        CreateVote(title, options) => voting_behaviour::create_vote(bot_data, title, options, false),
+        CreateVote(title, options) => {
+            voting_behaviour::create_vote(bot_data, title, options, false)
+        }
         SendVote => voting_behaviour::determine_vote_and_send_details_message(bot_data, None),
-        SendVoteWithUserId(user_id) => voting_behaviour::determine_vote_and_send_details_message(bot_data, Some(user_id)),
+        SendVoteWithUserId(user_id) => {
+            voting_behaviour::determine_vote_and_send_details_message(bot_data, Some(user_id))
+        }
         CloseVote => voting_behaviour::close_vote(bot_data),
         SetMovieLimit(number) => movie_behaviour::set_movie_limit(bot_data, number),
         ShowMovieLimit => movie_behaviour::show_movie_limit(bot_data),
         SetMovieVoteLimit(number) => voting_behaviour::set_movie_vote_limit(bot_data, number),
         ShowMovieVoteLimit => voting_behaviour::show_movie_vote_limit(bot_data),
-        RandomMovieVote(optional_limit) => voting_behaviour::create_random_movie_vote(bot_data, optional_limit),
+        RandomMovieVote(optional_limit) => {
+            voting_behaviour::create_random_movie_vote(bot_data, optional_limit)
+        }
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
         Save => serde_behaviour::store_bot_data(bot_data),
@@ -449,7 +489,13 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
             let message = bot_data.message.clone().unwrap();
             let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
                 embed
-                    .description(format!("Unbekanntes Kommando `{}`. Vielleicht vertippt? :see_no_evil:", message.content).as_str())
+                    .description(
+                        format!(
+                            "Unbekanntes Kommando `{}`. Vielleicht vertippt? :see_no_evil:",
+                            message.content
+                        )
+                        .as_str(),
+                    )
                     .color(COLOR_ERROR)
             });
         }
@@ -459,9 +505,15 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         PrefixIsNotAChar => help_behaviour::show_help_prefix(bot_data),
         WrongArgumentForWatchList => help_behaviour::show_help_watchlist(bot_data),
         WrongArgumentForHistory => help_behaviour::show_help_history(bot_data),
-        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => help_behaviour::show_help_status(bot_data),
-        NoArgumentForUnavailable | WrongArgumentForUnavailable => help_behaviour::show_help_set_status_unavailable(bot_data),
-        NotEnoughArgumentsForWatched | WrongArgumentsForWatched => help_behaviour::show_help_set_status_watched(bot_data),
+        NotEnoughArgumentsForStatus | WrongArgumentsForStatus => {
+            help_behaviour::show_help_status(bot_data)
+        }
+        NoArgumentForUnavailable | WrongArgumentForUnavailable => {
+            help_behaviour::show_help_set_status_unavailable(bot_data)
+        }
+        NotEnoughArgumentsForWatched | WrongArgumentsForWatched => {
+            help_behaviour::show_help_set_status_watched(bot_data)
+        }
         NoArgumentsForShowMovie => help_behaviour::show_help_show_movie(bot_data),
         NoArgumentsForSearchMovie => help_behaviour::show_help_search_movie(bot_data),
         NoArgumentsForCreateVote => help_behaviour::show_help_create_vote(bot_data),

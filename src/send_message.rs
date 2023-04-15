@@ -1,16 +1,25 @@
-use crate::{COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING, COLOR_INFORMATION, movie_behaviour, general_behaviour};
+use crate::{
+    general_behaviour, movie_behaviour, COLOR_ERROR, COLOR_INFORMATION, COLOR_SUCCESS,
+    COLOR_WARNING,
+};
 
 /**
  * Sends a message that the user has insufficient permissions
  */
 pub fn insufficient_permissions_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_insufficient_permissions_error_message failed.").channel_id,
+        bot_data
+            .message
+            .clone()
+            .expect("Passing message to send_insufficient_permissions_error_message failed.")
+            .channel_id,
         "",
-        |embed| embed
-            .title("Keine Berechtigung")
-            .description("Leider besitzt du nicht die benötigte Berechtigung um das zu tun.")
-            .color(crate::COLOR_ERROR)
+        |embed| {
+            embed
+                .title("Keine Berechtigung")
+                .description("Leider besitzt du nicht die benötigte Berechtigung um das zu tun.")
+                .color(crate::COLOR_ERROR)
+        },
     );
 }
 
@@ -18,8 +27,10 @@ pub fn insufficient_permissions_error(bot_data: &crate::BotData) {
  * Sends an embedded message that the movie was already added by someone
  */
 pub fn movie_already_exists(bot_data: &crate::BotData, id: u32, tmdb_id: u64) {
-
-    let message = bot_data.message.as_ref().expect("Passing message to send_movie_already_exists_message function failed");
+    let message = bot_data
+        .message
+        .as_ref()
+        .expect("Passing message to send_movie_already_exists_message function failed");
     let previous_entry = bot_data.watch_list.get(&id).expect("Accessing the watch list has failed inside the send_movie_already_exists_message function.");
 
     let _ = bot_data.bot.send_embed(
@@ -30,7 +41,7 @@ pub fn movie_already_exists(bot_data: &crate::BotData, id: u32, tmdb_id: u64) {
         .url(movie_behaviour::get_movie_link(tmdb_id, false).as_str())
         .thumbnail(movie_behaviour::generate_poster_link(&previous_entry.movie.poster_path).as_str())
         .description(
-            format!("**{}** hat diesen Film bereits am *{}* hinzugefügt.\nFalls du einen anderen Film meinst versuche das Hinzufügen durch einen IMDb Link.", 
+            format!("**{}** hat diesen Film bereits am *{}* hinzugefügt.\nFalls du einen anderen Film meinst versuche das Hinzufügen durch einen IMDb Link.",
                 previous_entry.user,
                 general_behaviour::timestamp_to_string(&previous_entry.added_timestamp, true),
             )
@@ -45,95 +56,195 @@ pub fn movie_already_exists(bot_data: &crate::BotData, id: u32, tmdb_id: u64) {
  */
 pub fn user_has_too_many_movies_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_user_has_too_many_movies_error_message failed.").channel_id,
+        bot_data
+            .message
+            .clone()
+            .expect("Passing message to send_user_has_too_many_movies_error_message failed.")
+            .channel_id,
         "",
-        |embed| embed
-            .title("Zu viele Filme hinzugefügt")
-            .description(
-                format!("Leider hast du bereits zu viele Filme zur Liste hinzugefügt. 
-                Das aktuelle Limit beträgt `{}` pro Nutzer.", 
-                    bot_data.movie_limit_per_user
+        |embed| {
+            embed
+                .title("Zu viele Filme hinzugefügt")
+                .description(
+                    format!(
+                        "Leider hast du bereits zu viele Filme zur Liste hinzugefügt.
+                Das aktuelle Limit beträgt `{}` pro Nutzer.",
+                        bot_data.movie_limit_per_user
+                    )
+                    .as_str(),
                 )
-                .as_str()
-            )
-            .color(crate::COLOR_INFORMATION)
+                .color(crate::COLOR_INFORMATION)
+        },
     );
 }
 
 /**
  * Takes a movie entry and sends an embedded message with all information of the movie
  */
-pub fn movie_information(bot_data: &crate::BotData, movie_entry: &movie_behaviour::WatchListEntry, new_movie: bool, ask_confirmation: bool, ask_set_watched: bool) -> Result<discord::model::Message, discord::Error> {
-    let message = bot_data.message.as_ref().expect("Passing message to send_movie_information_message function failed.");
+pub fn movie_information(
+    bot_data: &crate::BotData,
+    movie_entry: &movie_behaviour::WatchListEntry,
+    new_movie: bool,
+    ask_confirmation: bool,
+    ask_set_watched: bool,
+) -> Result<discord::model::Message, discord::Error> {
+    let message = bot_data
+        .message
+        .as_ref()
+        .expect("Passing message to send_movie_information_message function failed.");
 
     if new_movie {
-        bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title(format!("{}", movie_entry.movie.movie_title).as_str())
-            .url(
-                movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
-            )
-            .description(
-                movie_entry.movie.overview.clone().as_str()
-            )
-            .image(movie_behaviour::generate_poster_link(&movie_entry.movie.poster_path).as_str())
-            .color(COLOR_SUCCESS)
-            .fields(|fields| fields
-                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
-                .field("Erschienen", general_behaviour::timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.movie.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
-                .field("Budget", movie_entry.movie.budget.as_str(), true)
-                .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
-                .field("Watchlist-ID", movie_behaviour::get_movie_id_in_watch_list(&movie_entry.movie.movie_title, &bot_data.watch_list), true)
-            )
-            .footer(|footer| footer
-                .text(format!("{}", if ask_confirmation {"Meintest du diesen Film?"} else {""}).as_str())
-            )
-            .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
-        )
-    } else {
-        bot_data.bot.send_embed(
-            message.channel_id,
-            "",
-            |embed| embed
-            .title(format!("{}", movie_entry.movie.movie_title).as_str())
-            .url(
-                movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, false).as_str()
-            )
-            .description(
-                movie_entry.movie.overview.clone().as_str()
-            )
-            .image(movie_behaviour::generate_poster_link(&movie_entry.movie.poster_path).as_str())
-            .color(COLOR_SUCCESS)
-            .fields(|fields| fields
-                .field("Originaltitel", movie_entry.movie.original_title.as_str(), true)
-                .field("Originalsprache", movie_entry.movie.original_language.as_str(), true)
-                .field("Erschienen", general_behaviour::timestamp_to_string(&movie_entry.movie.release_date, false).as_str(), true)
-                .field("Genres", movie_entry.movie.genres.as_str(), true)
-                .field("Dauer", format!("{} min", movie_entry.movie.runtime).as_str(), true)
-                .field("Budget", movie_entry.movie.budget.as_str(), true)
-                .field("Hinzugefügt von", format!("<@{}>", movie_entry.user_id).as_str(), true)
-                .field("Hinzugefügt am", general_behaviour::timestamp_to_string(&movie_entry.added_timestamp, true).as_str(), true)
-                .field("Status", format!("{}", movie_entry.status.get_emoji()).as_str(), true)
-                .field("Watchlink", movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true).as_str(), false)
-            )
-            .footer(|footer| footer.text(
-                    format!("{}", 
-                        if ask_set_watched {
-                            "Soll der Film direkt als 'Watched' Status gesetzt werden?"
-                        } else {
-                            ""
-                        }
-                    )
-                    .as_str()
+        let movie_id_in_watchlist_option = movie_behaviour::get_movie_id_in_watch_list(
+            &movie_entry.movie.movie_title,
+            &bot_data.watch_list,
+        );
+
+        let mut movie_id_in_watchlist: String = String::from("Keine ID vorhanden");
+        if movie_id_in_watchlist_option.is_some() {
+            movie_id_in_watchlist = movie_id_in_watchlist_option
+                .expect("Checked that there is a movie in the watchlist")
+                .to_string();
+        }
+
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(format!("{}", movie_entry.movie.movie_title).as_str())
+                .url(movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, false).as_str())
+                .description(movie_entry.movie.overview.clone().as_str())
+                .image(
+                    movie_behaviour::generate_poster_link(&movie_entry.movie.poster_path).as_str(),
                 )
-            )
-            .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
-        )
+                .color(COLOR_SUCCESS)
+                .fields(|fields| {
+                    fields
+                        .field(
+                            "Originaltitel",
+                            movie_entry.movie.original_title.as_str(),
+                            true,
+                        )
+                        .field(
+                            "Originalsprache",
+                            movie_entry.movie.original_language.as_str(),
+                            true,
+                        )
+                        .field(
+                            "Erschienen",
+                            general_behaviour::timestamp_to_string(
+                                &movie_entry.movie.release_date,
+                                false,
+                            )
+                            .as_str(),
+                            true,
+                        )
+                        .field("Genres", movie_entry.movie.genres.as_str(), true)
+                        .field(
+                            "Dauer",
+                            format!("{} min", movie_entry.movie.runtime).as_str(),
+                            true,
+                        )
+                        .field("Budget", movie_entry.movie.budget.as_str(), true)
+                        .field(
+                            "Watchlink",
+                            movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true)
+                                .as_str(),
+                            false,
+                        )
+                        .field("Watchlist-ID", movie_id_in_watchlist.as_str(), true)
+                })
+                .footer(|footer| {
+                    footer.text(
+                        format!(
+                            "{}",
+                            if ask_confirmation {
+                                "Meintest du diesen Film?"
+                            } else {
+                                ""
+                            }
+                        )
+                        .as_str(),
+                    )
+                })
+                .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
+        })
+    } else {
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(format!("{}", movie_entry.movie.movie_title).as_str())
+                .url(movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, false).as_str())
+                .description(movie_entry.movie.overview.clone().as_str())
+                .image(
+                    movie_behaviour::generate_poster_link(&movie_entry.movie.poster_path).as_str(),
+                )
+                .color(COLOR_SUCCESS)
+                .fields(|fields| {
+                    fields
+                        .field(
+                            "Originaltitel",
+                            movie_entry.movie.original_title.as_str(),
+                            true,
+                        )
+                        .field(
+                            "Originalsprache",
+                            movie_entry.movie.original_language.as_str(),
+                            true,
+                        )
+                        .field(
+                            "Erschienen",
+                            general_behaviour::timestamp_to_string(
+                                &movie_entry.movie.release_date,
+                                false,
+                            )
+                            .as_str(),
+                            true,
+                        )
+                        .field("Genres", movie_entry.movie.genres.as_str(), true)
+                        .field(
+                            "Dauer",
+                            format!("{} min", movie_entry.movie.runtime).as_str(),
+                            true,
+                        )
+                        .field("Budget", movie_entry.movie.budget.as_str(), true)
+                        .field(
+                            "Hinzugefügt von",
+                            format!("<@{}>", movie_entry.user_id).as_str(),
+                            true,
+                        )
+                        .field(
+                            "Hinzugefügt am",
+                            general_behaviour::timestamp_to_string(
+                                &movie_entry.added_timestamp,
+                                true,
+                            )
+                            .as_str(),
+                            true,
+                        )
+                        .field(
+                            "Status",
+                            format!("{}", movie_entry.status.get_emoji()).as_str(),
+                            true,
+                        )
+                        .field(
+                            "Watchlink",
+                            movie_behaviour::get_movie_link(movie_entry.movie.tmdb_id, true)
+                                .as_str(),
+                            false,
+                        )
+                })
+                .footer(|footer| {
+                    footer.text(
+                        format!(
+                            "{}",
+                            if ask_set_watched {
+                                "Soll der Film direkt als 'Watched' Status gesetzt werden?"
+                            } else {
+                                ""
+                            }
+                        )
+                        .as_str(),
+                    )
+                })
+                .thumbnail(general_behaviour::get_tmdb_attribution_icon_url())
+        })
     }
 }
 
@@ -174,12 +285,18 @@ pub fn movie_title_not_found_error(bot_data: &crate::BotData, title: String) {
  */
 pub fn status_changed_successfully(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_message::status_changed_successfully failed.").channel_id,
+        bot_data
+            .message
+            .clone()
+            .expect("Passing message to send_message::status_changed_successfully failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .title("Status geändert")
-        .description("Der Status des Films wurde erfolgreich geändert.")
-        .color(COLOR_SUCCESS)
+        |embed| {
+            embed
+                .title("Status geändert")
+                .description("Der Status des Films wurde erfolgreich geändert.")
+                .color(COLOR_SUCCESS)
+        },
     );
 }
 
@@ -188,12 +305,18 @@ pub fn status_changed_successfully(bot_data: &crate::BotData) {
  */
 pub fn movie_removed_successfully(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.clone().expect("Passing message to send_message::movie_removed_successfully failed.").channel_id,
+        bot_data
+            .message
+            .clone()
+            .expect("Passing message to send_message::movie_removed_successfully failed.")
+            .channel_id,
         "",
-        |embed| embed
-            .title("Film entfernt.")
-            .description("Der Film wurde erfolgreich entfernt.")
-            .color(COLOR_WARNING)
+        |embed| {
+            embed
+                .title("Film entfernt.")
+                .description("Der Film wurde erfolgreich entfernt.")
+                .color(COLOR_WARNING)
+        },
     );
 }
 
@@ -202,12 +325,18 @@ pub fn movie_removed_successfully(bot_data: &crate::BotData) {
  */
 pub fn user_already_owns_a_vote_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::user_already_owns_a_vote_error failed.").channel_id, 
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::user_already_owns_a_vote_error failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .title("Du besitzt bereits eine Abstimmung.")
-        .description("Bitte beende zunächst die Abstimmung bevor du eine neue eröffnest.")
-        .color(crate::COLOR_ERROR)
+        |embed| {
+            embed
+                .title("Du besitzt bereits eine Abstimmung.")
+                .description("Bitte beende zunächst die Abstimmung bevor du eine neue eröffnest.")
+                .color(crate::COLOR_ERROR)
+        },
     );
 }
 
@@ -216,7 +345,7 @@ pub fn user_already_owns_a_vote_error(bot_data: &crate::BotData) {
  */
 pub fn not_enough_emojis_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::not_enough_emojis_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::not_enough_emojis_error failed.").channel_id,
         "",
         |embed| embed
         .title("Zu viele Vote-Optionen")
@@ -230,14 +359,24 @@ pub fn not_enough_emojis_error(bot_data: &crate::BotData) {
  */
 pub fn movie_not_found_in_watchlist_error(bot_data: &crate::BotData, movie_title: String) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::movie_not_found_in_watchlist_error failed.").channel_id, 
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::movie_not_found_in_watchlist_error failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .title("Film konnte nicht gefunden werden")
-        .description(
-            format!("Der Film '{}' konnte nicht in der Filmliste gefunden werden.", movie_title).as_str()
-        )
-        .color(crate::COLOR_ERROR)
+        |embed| {
+            embed
+                .title("Film konnte nicht gefunden werden")
+                .description(
+                    format!(
+                        "Der Film '{}' konnte nicht in der Filmliste gefunden werden.",
+                        movie_title
+                    )
+                    .as_str(),
+                )
+                .color(crate::COLOR_ERROR)
+        },
     );
 }
 
@@ -246,7 +385,7 @@ pub fn movie_not_found_in_watchlist_error(bot_data: &crate::BotData, movie_title
  */
 pub fn wrong_vote_parameter_error(bot_data: &crate::BotData, parameter: String) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::wrong_vote_parameter_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::wrong_vote_parameter_error failed.").channel_id,
         "",
         |embed| embed
         .title("Abstimmungsparameter hat falsches Format")
@@ -262,7 +401,7 @@ pub fn wrong_vote_parameter_error(bot_data: &crate::BotData, parameter: String) 
  */
 pub fn vote_message_failed_to_send_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::vote_message_failed_to_send_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::vote_message_failed_to_send_error failed.").channel_id,
         "",
         |embed| embed
         .title("Senden fehlgeschlagen")
@@ -276,12 +415,18 @@ pub fn vote_message_failed_to_send_error(bot_data: &crate::BotData) {
  */
 pub fn user_has_no_vote_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::user_has_no_vote_error failed.").channel_id, 
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::user_has_no_vote_error failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .title("Keine Abstimmung")
-        .description("Es sieht so aus als ob du aktuell keine Abstimmung besitzt.")
-        .color(crate::COLOR_ERROR)
+        |embed| {
+            embed
+                .title("Keine Abstimmung")
+                .description("Es sieht so aus als ob du aktuell keine Abstimmung besitzt.")
+                .color(crate::COLOR_ERROR)
+        },
     );
 }
 
@@ -290,7 +435,7 @@ pub fn user_has_no_vote_error(bot_data: &crate::BotData) {
  */
 pub fn other_user_has_no_vote_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::user_has_no_vote_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::user_has_no_vote_error failed.").channel_id,
         "",
         |embed| embed
         .title("Keine Abstimmung")
@@ -305,7 +450,7 @@ pub fn other_user_has_no_vote_error(bot_data: &crate::BotData) {
 pub fn vote_not_found_error(bot_data: &mut crate::BotData, user_id: &discord::model::UserId) {
     if let Ok(private_channel) = bot_data.bot.create_private_channel(*user_id) {
         let _ = bot_data.bot.send_embed(
-            private_channel.id, 
+            private_channel.id,
             "",
             |embed| embed
             .title("Abstimmung existiert nicht")
@@ -323,7 +468,7 @@ pub fn vote_not_found_error(bot_data: &mut crate::BotData, user_id: &discord::mo
  */
 pub fn emoji_not_part_of_vote_info(bot_data: &mut crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::emoji_not_part_of_vote_info failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::emoji_not_part_of_vote_info failed.").channel_id,
         "",
         |embed| embed
         .title("Emoji ist nicht Teil der Abstimmung")
@@ -338,7 +483,7 @@ pub fn emoji_not_part_of_vote_info(bot_data: &mut crate::BotData) {
  */
 pub fn emoji_not_recognized_as_reaction_info(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::emoji_not_recognized_as_reaction_info failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::emoji_not_recognized_as_reaction_info failed.").channel_id,
         "",
         |embed| embed
         .title("Emoji nicht erwartet")
@@ -352,13 +497,25 @@ pub fn emoji_not_recognized_as_reaction_info(bot_data: &crate::BotData) {
  */
 pub fn unknown_error_occured(bot_data: &crate::BotData, err_code: u32) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::unknown_error_occured failed.").channel_id, 
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::unknown_error_occured failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .title(format!("Unerwarteter Fehler {}", err_code).as_str())
-        .description(format!("Es ist ein unerwarteter Fehler aufgetreten (Fehlercode {}). 
-            Bitte kontaktiere den Programmierer", err_code).as_str())
-        .color(crate::COLOR_ERROR)
+        |embed| {
+            embed
+                .title(format!("Unerwarteter Fehler {}", err_code).as_str())
+                .description(
+                    format!(
+                        "Es ist ein unerwarteter Fehler aufgetreten (Fehlercode {}).
+            Bitte kontaktiere den Programmierer",
+                        err_code
+                    )
+                    .as_str(),
+                )
+                .color(crate::COLOR_ERROR)
+        },
     );
 }
 
@@ -367,7 +524,7 @@ pub fn unknown_error_occured(bot_data: &crate::BotData, err_code: u32) {
  */
 pub fn no_random_movie_vote_exists_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::no_random_movie_vote_exists failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::no_random_movie_vote_exists failed.").channel_id,
         "",
         |embed| embed
         .title("Es existiert aktuell keine Filmabstimmung")
@@ -381,7 +538,7 @@ pub fn no_random_movie_vote_exists_error(bot_data: &crate::BotData) {
  */
 pub fn there_is_already_a_random_movie_vote_information(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::there_is_already_a_random_movie_vote_information failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::there_is_already_a_random_movie_vote_information failed.").channel_id,
         "",
         |embed| embed
         .title("Bestehende Filmabstimmung")
@@ -395,7 +552,7 @@ pub fn there_is_already_a_random_movie_vote_information(bot_data: &crate::BotDat
  */
 pub fn no_movie_vote_options_in_movie_vote_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::no_movie_vote_options_in_movie_vote_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::no_movie_vote_options_in_movie_vote_error failed.").channel_id,
         "",
         |embed| embed
         .title("Keine Abstimmungsoptionen")
@@ -409,7 +566,7 @@ pub fn no_movie_vote_options_in_movie_vote_error(bot_data: &crate::BotData) {
  */
 pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id,
         "",
         |embed| embed
         .title("Senden fehlgeschlagen")
@@ -428,18 +585,18 @@ pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotDa
 //     let movie_watch_link = get_movie_link(movie.tmdb_id, true);
 
 //     if let Ok(message) = bot_data.bot.send_embed(
-//         bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id, 
+//         bot_data.message.as_ref().expect("Passing message to send_message::sending_of_movie_information_message_failed_error failed.").channel_id,
 //         "",
 //         |embed| embed
 //         .title("Watch-Link")
 //         .description(format!("Hier ist der Watch-Link für den Film *{}*
-        
+
 //             {}", movie.movie_title, movie_watch_link)
 //             .as_str()
 //         )
 //         .footer(|footer| footer
 //             .text(
-//                 format!("{}", 
+//                 format!("{}",
 //                     if ask_add_movie_to_watched {
 //                         "Soll der Film direkt als 'Watched' Status gesetzt werden?"
 //                     } else {
@@ -463,7 +620,7 @@ pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotDa
 //                 message.id,
 //                 discord::model::ReactionEmoji::Unicode(String::from("❎"))
 //             );
-    
+
 //             bot_data.wait_for_reaction.push(general_behaviour::WaitingForReaction::AddMovieToWatched(message.id, movie.clone()));
 //         }
 //     } else {
@@ -476,7 +633,7 @@ pub fn sending_of_movie_information_message_failed_error(bot_data: &crate::BotDa
  */
 pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::movie_not_added_to_watched_information failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::movie_not_added_to_watched_information failed.").channel_id,
         "",
         |embed| embed
         .title("Status nicht geändert")
@@ -490,14 +647,23 @@ pub fn movie_not_added_to_watched_information(bot_data: &crate::BotData) {
  */
 pub fn info(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::info failed.").channel_id, 
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::info failed.")
+            .channel_id,
         "",
-        |embed| embed
-        .fields(|builder| builder
-            .field("Author", "Jan Bechtold", true)
-            .field("Aktuelle Version", crate::VERSION, false)
-        )
-        .color(crate::COLOR_BOT)
+        |embed| {
+            embed
+                .fields(|builder| {
+                    builder.field("Author", "Jan Bechtold", true).field(
+                        "Aktuelle Version",
+                        crate::VERSION,
+                        false,
+                    )
+                })
+                .color(crate::COLOR_BOT)
+        },
     );
 }
 
@@ -507,7 +673,7 @@ pub fn info(bot_data: &crate::BotData) {
  */
 pub fn another_user_is_adding_a_movie_information(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::another_user_is_adding_a_movie_information failed.").channel_id, 
+        bot_data.message.as_ref().expect("Passing message to send_message::another_user_is_adding_a_movie_information failed.").channel_id,
         "",
         |embed| embed
         .title("Anderer Nutzer fügt gerade einen Film hinzu")
@@ -529,7 +695,7 @@ pub fn read_store_data_error(bot_data: &crate::BotData, error: serde_json::Error
                 format!(
                     "Beim Speichern oder Laden der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
                     `{} in line {}, column {}`
-                    
+
                     Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, können die Daten nicht abgespeichert oder geladen werden.",
                     match error.classify() {
                         serde_json::error::Category::Io => "IO Error: Failed to read or write bytes on an IO stream",
@@ -559,7 +725,7 @@ pub fn open_file_error(bot_data: &crate::BotData, error: std::io::Error) {
                 format!(
                     "Beim Öffnen der Datei zum Speichern/Lesen der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
                     `{:#?}`
-                
+
                     Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, kann es sein, dass die Daten nicht eingelesen oder gespeichert werden können.",
                     error
                 )
@@ -582,7 +748,7 @@ pub fn write_error(bot_data: &crate::BotData, error: std::io::Error) {
                 format!(
                     "Beim Schreiben der Datei zum Speichern der Daten ist ein Fehler aufgetreten. Folgende Fehlermeldung kann ich dir geben:
                     `{:#?}`
-                
+
                     Bitte verständige den Admin. Sollte der Fehler auch bei einem weiteren Versuch bestehen, kann es sein, dass die Daten nicht gespeichert werden können.",
                     error
                 )
@@ -597,13 +763,19 @@ pub fn write_error(bot_data: &crate::BotData, error: std::io::Error) {
  */
 pub fn data_saved_successfully(bot_data: &crate::BotData) {
     let _ = bot_data.bot.send_embed(
-        bot_data.message.as_ref().expect("Passing message to send_message::data_saved_successfully failed.").channel_id,
+        bot_data
+            .message
+            .as_ref()
+            .expect("Passing message to send_message::data_saved_successfully failed.")
+            .channel_id,
         "",
-        |embed| embed
-            .title("Daten erfolgreich gespeichert")
-            .description("Meine Daten wurden erfolgreich in die Speicherdatei geschrieben.")
-            .color(crate::COLOR_SUCCESS)
-        );
+        |embed| {
+            embed
+                .title("Daten erfolgreich gespeichert")
+                .description("Meine Daten wurden erfolgreich in die Speicherdatei geschrieben.")
+                .color(crate::COLOR_SUCCESS)
+        },
+    );
 }
 
 /**
@@ -621,7 +793,7 @@ pub fn adding_movie_timed_out_information(bot_data: &crate::BotData) {
 }
 
 /**
- * Sends an information message about how many movies with watch list status the user has added 
+ * Sends an information message about how many movies with watch list status the user has added
  */
 pub fn current_user_movie_count(bot_data: &crate::BotData, current_movie_count: usize) {
     let _ = bot_data.bot.send_embed(
