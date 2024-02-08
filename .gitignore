@@ -20,6 +20,7 @@ Cargo.lock
 
 ### added manually ###
 /external_data/src/lib.rs
+/external_data/target/
 /*.json
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode,rust
