@@ -214,13 +214,16 @@ fn main() {
             Err(err) => {
                 println!("[Warning] Receive error: {:?}", err);
                 if let discord::Error::WebSocket(..) = err {
-                    // Handle the websocket connection being dropped
-                    let (_connection, ready_event) =
-                        bot_data.bot.connect().expect("connect failed");
-                    state = State::new(ready_event);
-                    println!("[Ready] Reconnected successfully.");
-                }
-                if let discord::Error::Closed(..) = err {
+                    // Try to reconnect when websocket connection is dropped.
+                    // If that doesn't work don't do anything, we'll try again in the next loop
+                    // iteration.
+                    if let Ok((_connection, ready_event)) = bot_data.bot.connect() {
+                        state = State::new(ready_event);
+                        println!("[Ready] Reconnected successfully.");
+                    } else {
+                        println!("[Warning] Failed to reconnect.");
+                    }
+                } else if let discord::Error::Closed(..) = err {
                     println!("Discord Error Closed");
                 }
                 continue;
