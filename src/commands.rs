@@ -1,4 +1,4 @@
-use std::{str::FromStr};
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
@@ -146,7 +146,7 @@ impl FromStr for Command {
                 }
 
                 Self::ShowWatchlist(argument)
-            },
+            }
             ADD_MOVIE | ADD_MOVIE_SHORT => {
                 let title = arguments.join(" ");
                 if title.is_empty() {
@@ -154,7 +154,7 @@ impl FromStr for Command {
                 }
 
                 Self::AddMovie(title)
-            },
+            }
             REMOVE_MOVIE | REMOVE_MOVIE_SHORT => {
                 let argument = arguments.join(" ");
                 if argument.is_empty() {
@@ -167,7 +167,7 @@ impl FromStr for Command {
                 } else {
                     Self::RemoveMovieByTitle(argument)
                 }
-            },
+            }
             PREFIX => {
                 // there should be only one argument, all others will be ignored
                 if arguments.len() <= 0 {
@@ -182,7 +182,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::PrefixIsNotAChar);
                 }
-            },
+            }
             SHOW_HISTORY | SHOW_HISTORY_SHORT => {
                 // Only one argument expected. Others are ignored
                 let mut argument = "".to_string();
@@ -195,7 +195,7 @@ impl FromStr for Command {
                 }
 
                 Self::History(argument)
-            },
+            }
             SET_STATUS | SET_STATUS_SHORT => {
                 // first argument should be u32, second should be the new status
                 if arguments.len() < 2 {
@@ -214,7 +214,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForStatus);
                 }
-            },
+            }
             SET_STATUS_UNAVAILABLE | SET_STATUS_UNAVAILABLE_SHORT => {
                 let argument = arguments.join(" ");
                 if argument.is_empty() {
@@ -227,7 +227,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentForUnavailable);
                 }
-            },
+            }
             SET_STATUS_WATCHED | SET_STATUS_WATCHED_SHORT => {
                 // first argument should be u32, second should be the new status
                 if arguments.len() < 1 {
@@ -238,7 +238,7 @@ impl FromStr for Command {
                 // We know arguments has at least 1 element and we split the first off into id.
                 // Thus, id has exactly one element at [0].
                 let id = id[0];
-                
+
                 let mut date = "";
                 if arguments.len() > 0 {
                     date = arguments[0].trim();
@@ -249,7 +249,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForWatched);
                 }
-            },
+            }
             SHOW_MOVIE | SHOW_MOVIE_SHORT => {
                 // First argument should be a title consisting of multiple words, therefore join them with spaces
                 // In case it is an ID nothing will happen
@@ -264,7 +264,7 @@ impl FromStr for Command {
                 } else {
                     Self::ShowMovieByTitle(argument)
                 }
-            },
+            }
             SEARCH_MOVIE | SEARCH_MOVIE_SHORT => {
                 let title = arguments.join(" ");
                 if title.is_empty() {
@@ -272,14 +272,13 @@ impl FromStr for Command {
                 }
 
                 Self::SearchMovie(title)
-            },
+            }
             CREATE_VOTE | CREATE_VOTE_SHORT => {
-                let mut vote_parameters: Vec<String> 
-                    = arguments
-                        .join(" ") // Joins the (possibly more than one) arguments to conserve spaces
-                        .split("|") // Split the resulting string at the pipes
-                        .map(|x| x.trim().to_string()) // Remove the leading and trailing white spaces of every option
-                        .collect();
+                let mut vote_parameters: Vec<String> = arguments
+                    .join(" ") // Joins the (possibly more than one) arguments to conserve spaces
+                    .split("|") // Split the resulting string at the pipes
+                    .map(|x| x.trim().to_string()) // Remove the leading and trailing white spaces of every option
+                    .collect();
 
                 if vote_parameters.len() == 0 {
                     return Err(ParseCommandError::NoArgumentsForCreateVote);
@@ -288,7 +287,7 @@ impl FromStr for Command {
                 let vote_title = vote_parameters.remove(0);
 
                 Self::CreateVote(vote_title, vote_parameters)
-            },
+            }
             SEND_VOTE | SEND_VOTE_SHORT => {
                 let argument = arguments.join(" ");
 
@@ -317,7 +316,7 @@ impl FromStr for Command {
 
                     return Err(ParseCommandError::WrongArgumentsForSendVoteWithUserId);
                 }
-            },
+            }
             CLOSE_VOTE | CLOSE_VOTE_SHORT => Self::CloseVote,
             MOVIE_LIMIT | MOVIE_LIMIT_SHORT => {
                 let argument = arguments.join(" ");
@@ -331,7 +330,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForMovieLimit);
                 }
-            },
+            }
             MOVIE_VOTE_LIMIT | MOVIE_VOTE_LIMIT_SHORT => {
                 let argument = arguments.join(" ");
                 if argument.is_empty() {
@@ -344,7 +343,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentsForMovieVoteLimit);
                 }
-            },
+            }
             RANDOM_MOVIE_VOTE | RANDOM_MOVIE_VOTE_SHORT => {
                 let argument = arguments.join(" ");
                 if argument.is_empty() {
@@ -357,7 +356,7 @@ impl FromStr for Command {
                 } else {
                     return Err(ParseCommandError::WrongArgumentForRandomMovieVote);
                 }
-            },
+            }
             CLOSE_MOVIE_VOTE | CLOSE_MOVIE_VOTE_SHORT => Self::CloseMovieVote,
             INFO => Self::Info,
             SAVE => Self::Save,

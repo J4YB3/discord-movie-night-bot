@@ -1,6 +1,6 @@
 extern crate external_data;
 use commands::{Command, ParseCommandError, SimpleCommand};
-use discord::{self, model as Model, model::ServerId, Discord, State};
+use discord::{self, Discord, State, model as Model, model::ServerId};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
 use tmdb::themoviedb::*;

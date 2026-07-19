@@ -32,9 +32,6 @@ until PR 2. They preserve the manifest's `correctness`, `suspicious`, and `perf`
 deny policy rather than capping lint levels globally; remove the allows as PR 2
 remediates each legacy lint.
 
-`rustfmt.toml` uses stable rustfmt's `disable_all_formatting = true` as a
-temporary PR 1 baseline. Remove it in the immediately following formatting-only
-PR before adding or reformatting project code.
 
 [`just`](https://github.com/casey/just) is optional. If installed, `just check`
 runs the same checks in order. CI runs the Cargo commands directly and does not

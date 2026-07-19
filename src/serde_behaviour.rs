@@ -1,5 +1,5 @@
-use serde_json;
 use crate::send_message;
+use serde_json;
 
 /**
  * Tries to store the bot data. Sends an error message if it failed. Otherwise the file is written
@@ -25,8 +25,8 @@ pub fn store_bot_data(bot_data: &crate::BotData) {
             } else {
                 send_message::data_saved_successfully(bot_data);
             }
-        },
-        Err(error) => send_message::open_file_error(bot_data, error)
+        }
+        Err(error) => send_message::open_file_error(bot_data, error),
     }
 }
 
@@ -42,16 +42,14 @@ pub fn read_bot_data() -> Result<crate::BotData, String> {
             use std::io::Read;
 
             match file.read_to_string(&mut result_string) {
-                Ok(_) => {
-                    match serde_json::from_str::<crate::BotData>(result_string.as_str()) {
-                        Ok(bot_data) => Ok(bot_data),
-                        Err(error) => Err(format!("{:#?}", error))
-                    }
+                Ok(_) => match serde_json::from_str::<crate::BotData>(result_string.as_str()) {
+                    Ok(bot_data) => Ok(bot_data),
+                    Err(error) => Err(format!("{:#?}", error)),
                 },
                 Err(error) => Err(format!("{:#?}", error)),
             }
-        },
-        Err(error) => Err(format!("{:#?}", error))
+        }
+        Err(error) => Err(format!("{:#?}", error)),
     }
 }
 
@@ -61,5 +59,10 @@ pub fn read_bot_data() -> Result<crate::BotData, String> {
 fn open_data_file(truncate: bool) -> Result<std::fs::File, std::io::Error> {
     use std::fs::OpenOptions;
 
-    OpenOptions::new().read(true).write(true).create(true).truncate(truncate).open("discord_movie_night_bot_data.json")
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(truncate)
+        .open("discord_movie_night_bot_data.json")
 }

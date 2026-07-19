@@ -1,6 +1,6 @@
 use crate::{
-    general_behaviour, movie_behaviour, COLOR_ERROR, COLOR_INFORMATION, COLOR_SUCCESS,
-    COLOR_WARNING,
+    COLOR_ERROR, COLOR_INFORMATION, COLOR_SUCCESS, COLOR_WARNING, general_behaviour,
+    movie_behaviour,
 };
 
 /**
