@@ -25,8 +25,9 @@ serde_json = "1.0.64"
 unsafe_code = "forbid"
 
 [lints.clippy]
-correctness = "deny"
-suspicious = "deny"
-perf = "deny"
+# Lower group priority lets the explicit legacy lint levels below take precedence.
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
 unwrap_used = "warn"
 expect_used = "warn"
