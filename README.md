@@ -1,31 +1,48 @@
 # discord-movie-night-bot
-A bot for managing movies and deciding on which movie should be watched next.
 
-## Using the bot on your own server
-Since I can't provide a web server for you to host this bot on, you need to follow these steps:
-1. Note that in the process you have to provide personal information to TMDb in order to get your API key. In case you don't want that, you can stop here.
-1. Download the source files via git clone or as a zip archive (and unpack them)
-1. Create an application on the official discord developers page (discord.com/developers)
-1. Attach a bot to the created application under `Settings > Bot` 
-1. Copy the Bot-Token to your clipboard
-1. Add the token to the source files
-    1. Create the file `lib.rs` in the `external_data/src` directory
-    1. To this file add the line `pub static DISCORD_TOKEN: &'static str = "<YOUR_TOKEN>";` where you replace `<YOUR_TOKEN>` with the previously copied token. Note that the double quotes are necessary.
-1. Get an TMDb API key
-    1. Create an TMDb account, if you don't already have one.
-    1. Under profile->settings->API create an API key, accepting the terms of use and filling in your personal data into the form.
-    1. Once you have created the key, add this line to the file as well, replacing <API_KEY> with your API key: `pub static TMDB_API_KEY: &'static str = "<API_KEY>"`
-    1. In your TMDB Profile there should also be an API Read access token. You also need to provide this in the `lib.rs` file under `pub static TMDB_API_READ_ACCESS_TOKEN: &'static str = "<API_READ_ACCESS_TOKEN>";`
+A Discord bot for managing movie-night watch lists and votes.
 
-In order to compile an executable file you need to have the programming language Rust and its dependencies installed on your system. Because you need to generate your own token and API key I can not provide an executable.
+## Run locally
 
-### Important note: 
-Publishing the token will open the bot to hacking attacks, since everybody with the token can potentially run dangerous programs on the bot. Do never publish the token anywhere.
+Install the Rust toolchain specified by `rust-toolchain.toml`. The temporary
+`external_data` compatibility shim reads `DISCORD_TOKEN` and `TMDB_API_KEY`
+from compile-time environment variables. Supply them when compiling or running:
+
+```sh
+DISCORD_TOKEN="your-discord-token" TMDB_API_KEY="your-tmdb-api-key" cargo run --locked
+```
+
+The shim stores no secrets in the repository. Typed runtime configuration will
+replace this temporary mechanism in PR 3.
+
+## Local verification
+
+Run these commands before opening a pull request:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings -A clippy::absurd_extreme_comparisons -A clippy::cmp_owned -A clippy::collapsible_if -A clippy::comparison_to_empty -A clippy::empty_line_after_doc_comments -A clippy::enum_variant_names -A clippy::expect_used -A clippy::explicit_counter_loop -A clippy::for_kv_map -A clippy::large_enum_variant -A clippy::len_zero -A clippy::manual_find -A clippy::manual_map -A clippy::match_like_matches_macro -A clippy::needless_bool -A clippy::needless_borrow -A clippy::needless_range_loop -A clippy::needless_return -A clippy::ptr_arg -A clippy::question_mark -A clippy::redundant_field_names -A clippy::redundant_pattern_matching -A clippy::single_component_path_imports -A clippy::unnecessary_unwrap -A clippy::unwrap_used -A clippy::useless_conversion -A clippy::useless_format
+cargo test --workspace --all-features --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
+cargo deny check
+```
+
+The explicit Clippy allows form a temporary baseline for existing legacy code
+until PR 2. They preserve the manifest's `correctness`, `suspicious`, and `perf`
+deny policy rather than capping lint levels globally; remove the allows as PR 2
+remediates each legacy lint.
+
+`rustfmt.toml` uses stable rustfmt's `disable_all_formatting = true` as a
+temporary PR 1 baseline. Remove it in the immediately following formatting-only
+PR before adding or reformatting project code.
+
+[`just`](https://github.com/casey/just) is optional. If installed, `just check`
+runs the same checks in order. CI runs the Cargo commands directly and does not
+require `just`.
 
 ## Inviting the bot to your server
-After the executable was created you just need to invite the bot to your server.
-Following this link (discordapi.com/permissions.html#257088) will lead you to a permissions calculator. On this page you just need to paste the Client ID of your Discord application into the field at the bottom. The Client ID can be found on the Discord developers page (where you created the Discord bot application) under the section `OAuth2`.  
-After you inserted the Client ID you can follow the link at the bottom of the page, which will redirect you to a Discord page asking you to log into your Discord account. If you are logged in, the page will prompt you to enter a server to add the bot to.
 
-## Starting the executable
-Once all these steps are completed you can start the executable. The bot will wake up and should now be online on your server.
+Use the Discord permissions calculator at
+<https://discordapi.com/permissions.html#257088>. Paste the Client ID from the
+Discord Developer Portal's `OAuth2` section, then follow the generated link to
+add the bot to a server.

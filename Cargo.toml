@@ -2,12 +2,16 @@
 name = "discord_movie_night"
 version = "0.1.0"
 authors = ["jan"]
-edition = "2018"
+edition = "2024"
+rust-version = "1.85"
+description = "A Discord bot for managing movie-night watch lists and votes"
+repository = "https://github.com/J4YB3/discord-movie-night-bot"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-discord = { git = "https://github.com/SpaceManiac/discord-rs" }
+discord = { git = "https://github.com/SpaceManiac/discord-rs", rev = "500c344c2d5679a3c08514f01b96fac59eb276df" }
 external_data = { path = "external_data" }
 chrono = "0.4.19"
 itertools = "0.10.0"
@@ -16,3 +20,14 @@ regex = "1.5"
 rand = "0.8.3"
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+# Lower group priority lets the explicit legacy lint levels below take precedence.
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"

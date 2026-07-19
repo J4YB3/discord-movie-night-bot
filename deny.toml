@@ -1,0 +1,53 @@
+# Dependency policy for the locked legacy graph.
+
+[graph]
+all-features = true
+
+[advisories]
+# The locked discord 0.9 and tmdb 3.0 dependency trees carry these advisories.
+# They remain unchanged until their planned removal in PR 5 and PR 6.
+ignore = [
+    "RUSTSEC-2020-0016",
+    "RUSTSEC-2020-0036",
+    "RUSTSEC-2020-0071",
+    "RUSTSEC-2021-0078",
+    "RUSTSEC-2021-0079",
+    "RUSTSEC-2021-0124",
+    "RUSTSEC-2021-0137",
+    "RUSTSEC-2021-0144",
+    "RUSTSEC-2022-0004",
+    "RUSTSEC-2023-0034",
+    "RUSTSEC-2023-0050",
+    "RUSTSEC-2023-0081",
+    "RUSTSEC-2024-0003",
+    "RUSTSEC-2024-0332",
+    "RUSTSEC-2024-0421",
+    "RUSTSEC-2025-0025",
+    "RUSTSEC-2025-0124",
+    "RUSTSEC-2026-0051",
+    "RUSTSEC-2026-0052",
+    "RUSTSEC-2026-0054",
+    "RUSTSEC-2026-0057",
+    "RUSTSEC-2026-0058",
+    "RUSTSEC-2026-0059",
+    "RUSTSEC-2026-0060",
+    "RUSTSEC-2026-0063",
+]
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib"]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The legacy discord-rs source pulls this transitive Git dependency; remove it in PR 6.
+allow-git = [
+    "https://github.com/SpaceManiac/discord-rs",
+    "https://github.com/SpaceManiac/rust-websocket",
+]
