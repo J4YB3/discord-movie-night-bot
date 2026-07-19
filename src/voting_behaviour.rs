@@ -764,7 +764,7 @@ pub fn create_random_movie_vote(bot_data: &mut crate::BotData, optional_limit: O
     }
 
     use crate::movie_behaviour;
-    use rand::{seq::IteratorRandom, thread_rng, Rng};
+    use rand::{Rng, seq::IteratorRandom, thread_rng};
 
     // Get the three (or less) movies that have earliest creation date (lowest id)
     let mut earliest_movie_ids_vec: Vec<&u32> =

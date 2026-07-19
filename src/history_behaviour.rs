@@ -1,8 +1,8 @@
+use crate::COLOR_BOT;
 use crate::general_behaviour::timestamp_to_string;
 use crate::movie_behaviour::{
-    get_movie_link, MovieStatus, SortedMovieList, UserSortedMovieListVectorEntry, WatchListEntry,
+    MovieStatus, SortedMovieList, UserSortedMovieListVectorEntry, WatchListEntry, get_movie_link,
 };
-use crate::COLOR_BOT;
 use itertools::Itertools;
 use std::collections::HashMap;
 
