@@ -1,0 +1,28 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze Rust
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@0fa1882f994fbd81a47ab0804f93354f5ea40147
+        with:
+          languages: rust
+      - name: Build
+        uses: github/codeql-action/autobuild@0fa1882f994fbd81a47ab0804f93354f5ea40147
+      - name: Analyze
+        uses: github/codeql-action/analyze@0fa1882f994fbd81a47ab0804f93354f5ea40147
