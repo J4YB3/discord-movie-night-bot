@@ -1,0 +1,18 @@
+{
+  "watch_list": {},
+  "votes": {},
+  "bot_user": {
+    "id": 77,
+    "username": "movie-bot",
+    "discriminator": 1,
+    "avatar": null,
+    "bot": true
+  },
+  "message": null,
+  "server_roles": [],
+  "server_id": 123456789,
+  "custom_prefix": "!",
+  "movie_limit_per_user": 7,
+  "movie_vote_limit": 3,
+  "next_movie_id": 42
+}

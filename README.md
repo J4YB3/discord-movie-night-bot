@@ -4,16 +4,32 @@ A Discord bot for managing movie-night watch lists and votes.
 
 ## Run locally
 
-Install the Rust toolchain specified by `rust-toolchain.toml`. The temporary
-`external_data` compatibility shim reads `DISCORD_TOKEN` and `TMDB_API_KEY`
-from compile-time environment variables. Supply them when compiling or running:
+Install the Rust toolchain specified by `rust-toolchain.toml`. Configure the
+bot with environment variables at runtime; no dotenv file is loaded. Copy the
+variable names from `.env.example` into your shell or deployment environment.
+
+Required variables:
+
+- `DISCORD_TOKEN`
+- `TMDB_API_KEY`
+
+Optional variables:
+
+- `DISCORD_MOVIE_NIGHT_DATA_FILE` — defaults to
+  `discord_movie_night_bot_data.json`.
+- `DISCORD_MOVIE_NIGHT_LOG_FILTER` — overrides `RUST_LOG` when set.
+
+Start the bot after exporting the required values:
 
 ```sh
-DISCORD_TOKEN="your-discord-token" TMDB_API_KEY="your-tmdb-api-key" cargo run --locked
+export DISCORD_TOKEN="your-discord-token"
+export TMDB_API_KEY="your-tmdb-api-key"
+cargo run --locked
 ```
 
-The shim stores no secrets in the repository. Typed runtime configuration will
-replace this temporary mechanism in PR 3.
+Logging uses `DISCORD_MOVIE_NIGHT_LOG_FILTER` first, then `RUST_LOG`, and
+falls back to the `info` filter. Keep secrets out of shell history and never
+commit them to the repository.
 
 ## Local verification
 
