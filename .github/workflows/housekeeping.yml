@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+  pull_request:
+    types: [closed]
   issues:
     types: [opened, edited, reopened]
 
@@ -100,3 +102,34 @@ jobs:
               issue_number: issue.number,
               labels: matches.length > 0 ? matches : ["triage: needs-review"],
             });
+
+
+  pr-cache-cleanup:
+    name: Remove closed pull request caches
+    if: github.event_name == 'pull_request'
+    permissions:
+      actions: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete pull request caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh cache list --ref refs/pull/${PR_NUMBER}/merge --limit 100 --json id --jq '.[].id' | xargs -r -n 1 gh cache delete || true
+
+  stale-cache-cleanup:
+    name: Remove stale non-main caches
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      actions: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches unused for 14 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cutoff=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api --paginate repos/${GH_REPO}/actions/caches?per_page=100 --jq --arg cutoff "${cutoff}" '.actions_caches[] | select(.ref != "refs/heads/main" and .last_accessed_at < $cutoff) | .id' | xargs -r -n 1 gh cache delete || true
