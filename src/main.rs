@@ -122,10 +122,14 @@ fn initialize_observability() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn clear_dirty_after_save(dirty: &mut bool, succeeded: bool) {
-    if succeeded {
+fn handle_persistence_result(
+    dirty: &mut bool,
+    result: Result<(), serde_behaviour::PersistenceError>,
+) -> Result<(), serde_behaviour::PersistenceError> {
+    if result.is_ok() {
         *dirty = false;
     }
+    result
 }
 
 fn load_state_and_create_client<T, F>(
@@ -166,7 +170,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let (persisted_state, bot) = load_state_and_create_client(config::get().data_file(), || {
         create_discord_client().map_err(|error| Box::new(error) as Box<dyn Error>)
     })
-    .map_err(|error| {
+    .inspect_err(|error| {
         if let Some(persistence_error) = error.downcast_ref::<serde_behaviour::PersistenceError>() {
             tracing::error!(
                 event = "bot_data_load_failed",
@@ -177,7 +181,6 @@ fn run() -> Result<(), Box<dyn Error>> {
                 "persisted state could not be loaded"
             );
         }
-        error
     })?;
     let (mut connection, ready_event) = bot.connect()?;
     let mut state = State::new(ready_event);
@@ -220,10 +223,15 @@ fn run() -> Result<(), Box<dyn Error>> {
             last_save = Instant::now();
 
             if something_changed {
-                match serde_behaviour::store_bot_data_silently(&bot_data) {
-                    Ok(()) => clear_dirty_after_save(&mut something_changed, true),
+                match handle_persistence_result(
+                    &mut something_changed,
+                    serde_behaviour::store_bot_data_silently(&bot_data),
+                ) {
+                    Ok(()) => tracing::info!(
+                        event = "hourly_bot_data_persistence_succeeded",
+                        "hourly bot data persistence succeeded"
+                    ),
                     Err(error) => {
-                        clear_dirty_after_save(&mut something_changed, false);
                         log_persistence_failure("hourly_bot_data_persistence_failed", &error);
                     }
                 }
@@ -465,16 +473,17 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     if something_changed {
-        match serde_behaviour::store_bot_data_silently(&bot_data) {
+        match handle_persistence_result(
+            &mut something_changed,
+            serde_behaviour::store_bot_data_silently(&bot_data),
+        ) {
             Ok(()) => {
-                clear_dirty_after_save(&mut something_changed, true);
                 tracing::info!(
                     event = "final_bot_data_persistence_succeeded",
                     "final bot data persistence succeeded"
                 );
             }
             Err(error) => {
-                clear_dirty_after_save(&mut something_changed, false);
                 log_persistence_failure("final_bot_data_persistence_failed", &error);
             }
         }
@@ -617,10 +626,12 @@ fn handle_command(bot_data: &mut BotData, command: Command, dirty: &mut bool) {
         }
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
-        Save => match serde_behaviour::store_bot_data(bot_data) {
-            Ok(()) => clear_dirty_after_save(dirty, true),
+        Save => match handle_persistence_result(dirty, serde_behaviour::store_bot_data(bot_data)) {
+            Ok(()) => tracing::info!(
+                event = "command_bot_data_persistence_succeeded",
+                "command bot data persistence succeeded"
+            ),
             Err(error) => {
-                clear_dirty_after_save(dirty, false);
                 log_persistence_failure("command_bot_data_persistence_failed", &error);
             }
         },
@@ -687,7 +698,7 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_dirty_after_save, load_state_and_create_client, panic_payload_classification,
+        handle_persistence_result, load_state_and_create_client, panic_payload_classification,
     };
     use std::{
         fs,
@@ -705,10 +716,17 @@ mod tests {
 
     #[test]
     fn failed_save_keeps_the_state_dirty() {
+        let path = temporary_data_file("failed-dirty-save");
         let mut dirty = true;
+        let failed_save = crate::serde_behaviour::save_persisted_state_with_failure_for_test(
+            &path,
+            &crate::serde_behaviour::PersistedState::default(),
+        );
 
-        clear_dirty_after_save(&mut dirty, false);
+        let error = handle_persistence_result(&mut dirty, failed_save)
+            .expect_err("injected persistence failure must be returned");
 
+        assert_eq!(error.stage(), "write_temp");
         assert!(dirty);
     }
 

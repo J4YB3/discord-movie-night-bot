@@ -299,7 +299,7 @@ pub(crate) fn store_bot_data_silently(bot_data: &crate::BotData) -> Result<(), P
 }
 
 #[cfg(test)]
-fn save_persisted_state_with_failure_for_test(
+pub(crate) fn save_persisted_state_with_failure_for_test(
     path: &Path,
     state: &PersistedState,
 ) -> Result<(), PersistenceError> {
@@ -378,8 +378,10 @@ mod tests {
     }
 
     #[test]
-    fn failed_save_preserves_the_previous_valid_file() {
-        let path = temporary_data_file("failed-save");
+    fn failed_save_preserves_the_previous_valid_file_and_cleans_up_temps() {
+        let directory = temporary_data_file("failed-save").with_extension("directory");
+        fs::create_dir(&directory).expect("test directory must be created");
+        let path = directory.join("state.json");
         let previous = r#"{"schema_version":1,"watch_list":{},"server_id":0,"custom_prefix":".","movie_limit_per_user":10,"movie_vote_limit":2,"next_movie_id":0}"#;
         fs::write(&path, previous).expect("previous state must be written");
         let result = save_persisted_state_with_failure_for_test(&path, &PersistedState::default());
@@ -388,15 +390,26 @@ mod tests {
             fs::read_to_string(&path).expect("previous state must remain"),
             previous
         );
-        fs::remove_file(path).expect("temporary file must be removed");
+        let entries = fs::read_dir(&directory)
+            .expect("test directory must be readable")
+            .map(|entry| {
+                entry
+                    .expect("test directory entry must be readable")
+                    .file_name()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(entries, vec![std::ffi::OsString::from("state.json")]);
+        fs::remove_dir_all(directory).expect("test directory must be removed");
     }
 
     #[test]
     fn successful_atomic_save_replaces_existing_state() {
         let path = temporary_data_file("atomic-replace");
         fs::write(&path, "old state").expect("previous state must be written");
-        let mut state = PersistedState::default();
-        state.next_movie_id = 42;
+        let state = PersistedState {
+            next_movie_id: 42,
+            ..PersistedState::default()
+        };
         save_persisted_state(&path, &state).expect("state must save atomically");
         assert_eq!(
             load_persisted_state(&path)
