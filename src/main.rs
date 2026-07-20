@@ -97,10 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn initialize_observability() -> Result<(), Box<dyn Error>> {
-    let filter = match config::get().log_filter() {
-        Some(filter) => EnvFilter::try_new(filter)?,
-        None => EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-    };
+    let filter = EnvFilter::try_new(config::get().log_filter())?;
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .try_init()

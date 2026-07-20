@@ -8,7 +8,7 @@ pub(crate) struct Config {
     discord_token: String,
     tmdb_api_key: String,
     data_file: PathBuf,
-    log_filter: Option<String>,
+    log_filter: String,
 }
 
 pub(crate) fn initialize() -> Result<(), ConfigError> {
@@ -50,7 +50,7 @@ impl Config {
             data_file: optional_value(&get, "DISCORD_MOVIE_NIGHT_DATA_FILE")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from(DEFAULT_DATA_FILE)),
-            log_filter: optional_value(&get, "DISCORD_MOVIE_NIGHT_LOG_FILTER"),
+            log_filter: select_log_filter(&get),
         })
     }
 
@@ -66,8 +66,8 @@ impl Config {
         &self.data_file
     }
 
-    pub(crate) fn log_filter(&self) -> Option<&str> {
-        self.log_filter.as_deref()
+    pub(crate) fn log_filter(&self) -> &str {
+        &self.log_filter
     }
 }
 
@@ -114,9 +114,15 @@ fn optional_value(get: &impl Fn(&str) -> Option<String>, key: &str) -> Option<St
     get(key).filter(|value| !value.is_empty())
 }
 
+fn select_log_filter(get: impl Fn(&str) -> Option<String>) -> String {
+    optional_value(&get, "DISCORD_MOVIE_NIGHT_LOG_FILTER")
+        .or_else(|| optional_value(&get, "RUST_LOG"))
+        .unwrap_or_else(|| "info".to_owned())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Config;
+    use super::{Config, select_log_filter};
     use std::collections::BTreeMap;
 
     #[test]
@@ -144,5 +150,33 @@ mod tests {
 
         assert!(!debug.contains("discord-secret"));
         assert!(!debug.contains("tmdb-secret"));
+    }
+
+    #[test]
+    fn log_filter_prefers_the_application_variable() {
+        let environment = BTreeMap::from([
+            ("DISCORD_MOVIE_NIGHT_LOG_FILTER", "debug"),
+            ("RUST_LOG", "warn"),
+        ]);
+
+        assert_eq!(
+            select_log_filter(|key| environment.get(key).map(ToString::to_string)),
+            "debug"
+        );
+    }
+
+    #[test]
+    fn log_filter_uses_rust_log_when_application_variable_is_absent() {
+        let environment = BTreeMap::from([("RUST_LOG", "warn")]);
+
+        assert_eq!(
+            select_log_filter(|key| environment.get(key).map(ToString::to_string)),
+            "warn"
+        );
+    }
+
+    #[test]
+    fn log_filter_defaults_to_info() {
+        assert_eq!(select_log_filter(|_| None), "info");
     }
 }

@@ -12,6 +12,7 @@ use std::{
 pub(crate) const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PersistedState {
     pub(crate) schema_version: u32,
     pub(crate) watch_list: std::collections::HashMap<u32, crate::movie_behaviour::WatchListEntry>,
@@ -20,6 +21,30 @@ pub(crate) struct PersistedState {
     pub(crate) movie_limit_per_user: u32,
     pub(crate) movie_vote_limit: u32,
     pub(crate) next_movie_id: u32,
+}
+
+#[derive(Deserialize)]
+struct LegacyPersistedState {
+    watch_list: std::collections::HashMap<u32, crate::movie_behaviour::WatchListEntry>,
+    server_id: discord::model::ServerId,
+    custom_prefix: char,
+    movie_limit_per_user: u32,
+    movie_vote_limit: u32,
+    next_movie_id: u32,
+}
+
+impl From<LegacyPersistedState> for PersistedState {
+    fn from(state: LegacyPersistedState) -> Self {
+        Self {
+            schema_version: SCHEMA_VERSION,
+            watch_list: state.watch_list,
+            server_id: state.server_id,
+            custom_prefix: state.custom_prefix,
+            movie_limit_per_user: state.movie_limit_per_user,
+            movie_vote_limit: state.movie_vote_limit,
+            next_movie_id: state.next_movie_id,
+        }
+    }
 }
 
 impl Default for PersistedState {
@@ -224,14 +249,20 @@ pub(crate) fn load_persisted_state(path: &Path) -> Result<PersistedState, Persis
             source: error,
         });
     }
-    let state = serde_json::from_str::<PersistedState>(&json).map_err(|source| {
-        PersistenceError::Parse {
-            path: path.to_path_buf(),
-            line: source.line(),
-            column: source.column(),
-            source,
-        }
-    })?;
+    let value = serde_json::from_str::<serde_json::Value>(&json)
+        .map_err(|source| parse_error(path, source))?;
+    let state = if value
+        .as_object()
+        .and_then(|object| object.get("schema_version"))
+        .is_some()
+    {
+        serde_json::from_value::<PersistedState>(value)
+            .map_err(|source| parse_error(path, source))?
+    } else {
+        serde_json::from_value::<LegacyPersistedState>(value)
+            .map(PersistedState::from)
+            .map_err(|source| parse_error(path, source))?
+    };
     if state.schema_version != SCHEMA_VERSION {
         return Err(PersistenceError::UnsupportedSchema {
             path: path.to_path_buf(),
@@ -239,6 +270,15 @@ pub(crate) fn load_persisted_state(path: &Path) -> Result<PersistedState, Persis
         });
     }
     Ok(state)
+}
+
+fn parse_error(path: &Path, source: serde_json::Error) -> PersistenceError {
+    PersistenceError::Parse {
+        path: path.to_path_buf(),
+        line: source.line(),
+        column: source.column(),
+        source,
+    }
 }
 
 pub(crate) fn save_persisted_state(
@@ -350,6 +390,42 @@ mod tests {
         }
         assert_eq!(loaded.schema_version, SCHEMA_VERSION);
         assert_eq!(loaded.custom_prefix, state.custom_prefix);
+        fs::remove_file(path).expect("temporary file must be removed");
+    }
+
+    #[test]
+    fn migrates_pr64_legacy_state_and_ignores_runtime_fields() {
+        let path = temporary_data_file("pr64-legacy");
+        fs::write(&path, include_str!("fixtures/pr64-state.json"))
+            .expect("legacy fixture must be written");
+
+        let state = load_persisted_state(&path).expect("legacy state must migrate");
+
+        assert_eq!(state.schema_version, SCHEMA_VERSION);
+        assert!(state.watch_list.is_empty());
+        assert_eq!(state.server_id.0, 123_456_789);
+        assert_eq!(state.custom_prefix, '!');
+        assert_eq!(state.movie_limit_per_user, 7);
+        assert_eq!(state.movie_vote_limit, 3);
+        assert_eq!(state.next_movie_id, 42);
+
+        save_persisted_state(&path, &state).expect("migrated state must save");
+        let saved = fs::read_to_string(&path).expect("migrated state must be readable");
+        assert!(saved.contains(&format!("\"schema_version\": {SCHEMA_VERSION}")));
+        assert!(!saved.contains("\"votes\""));
+        fs::remove_file(path).expect("temporary file must be removed");
+    }
+
+    #[test]
+    fn versioned_state_with_legacy_runtime_fields_is_not_migrated() {
+        let path = temporary_data_file("versioned-runtime-fields");
+        fs::write(
+            &path,
+            r#"{"schema_version":1,"watch_list":{},"server_id":0,"custom_prefix":".","movie_limit_per_user":10,"movie_vote_limit":2,"next_movie_id":0,"votes":{}}"#,
+        )
+        .expect("versioned fixture must be written");
+
+        assert!(load_persisted_state(&path).is_err());
         fs::remove_file(path).expect("temporary file must be removed");
     }
 
