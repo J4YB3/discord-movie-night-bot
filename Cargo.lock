@@ -317,7 +317,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "discord",
- "external_data",
  "itertools",
  "rand 0.8.7",
  "regex",
@@ -378,10 +377,6 @@ dependencies = [
  "libc",
  "windows-sys",
 ]
-
-[[package]]
-name = "external_data"
-version = "0.1.0"
 
 [[package]]
 name = "failure"

@@ -1,4 +1,3 @@
-extern crate external_data;
 use commands::{Command, ParseCommandError, SimpleCommand};
 use discord::{self, Discord, State, model as Model, model::ServerId};
 use serde::{Deserialize, Serialize};
@@ -16,6 +15,7 @@ use tmdb::themoviedb::*;
 use tracing_subscriber::EnvFilter;
 
 mod commands;
+mod config;
 mod general_behaviour;
 mod help_behaviour;
 mod history_behaviour;
@@ -69,7 +69,7 @@ pub struct BotData {
 
 fn get_tmdb_struct() -> TMDb {
     TMDb {
-        api_key: external_data::TMDB_API_KEY,
+        api_key: config::get().tmdb_api_key(),
         language: "de",
     }
 }
@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for BotData {
 }
 
 fn create_discord_client() -> discord::Result<Discord> {
-    Discord::from_bot_token(external_data::DISCORD_TOKEN)
+    Discord::from_bot_token(config::get().discord_token())
 }
 
 fn deserialize_bot_data<'de, D, E>(
@@ -169,12 +169,16 @@ const MAX_ENTRIES_PER_PAGE: usize = 10;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> Result<(), Box<dyn Error>> {
+    config::initialize()?;
     initialize_observability()?;
     run()
 }
 
 fn initialize_observability() -> Result<(), Box<dyn Error>> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = match config::get().log_filter() {
+        Some(filter) => EnvFilter::try_new(filter)?,
+        None => EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+    };
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .try_init()
