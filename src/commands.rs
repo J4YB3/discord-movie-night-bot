@@ -31,6 +31,36 @@ pub enum Command {
     Count,
 }
 
+impl Command {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Quit => QUIT,
+            Self::AddMovie(_) => ADD_MOVIE,
+            Self::RemoveMovieByTitle(_) | Self::RemoveMovieById(_) => REMOVE_MOVIE,
+            Self::ShowWatchlist(_) => SHOW_WATCH_LIST,
+            Self::Help(_) => HELP,
+            Self::Prefix(_) => PREFIX,
+            Self::SetMovieLimit(_) => MOVIE_LIMIT,
+            Self::ShowMovieLimit => MOVIE_LIMIT,
+            Self::History(_) => SHOW_HISTORY,
+            Self::SetStatus(_, _) => SET_STATUS,
+            Self::Unavailable(_) => SET_STATUS_UNAVAILABLE,
+            Self::Watched(_, _) => SET_STATUS_WATCHED,
+            Self::ShowMovieByTitle(_) | Self::ShowMovieById(_) => SHOW_MOVIE,
+            Self::SearchMovie(_) => SEARCH_MOVIE,
+            Self::CreateVote(_, _) => CREATE_VOTE,
+            Self::SendVote | Self::SendVoteWithUserId(_) => SEND_VOTE,
+            Self::CloseVote => CLOSE_VOTE,
+            Self::SetMovieVoteLimit(_) | Self::ShowMovieVoteLimit => MOVIE_VOTE_LIMIT,
+            Self::RandomMovieVote(_) => RANDOM_MOVIE_VOTE,
+            Self::CloseMovieVote => CLOSE_MOVIE_VOTE,
+            Self::Info => INFO,
+            Self::Save => SAVE,
+            Self::Count => COUNT_MOVIES,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseCommandError {
     NoCommand,

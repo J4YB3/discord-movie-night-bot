@@ -41,12 +41,15 @@ pub fn show_help(bot_data: &crate::BotData) {
     `random_movie_vote`
     `send_vote`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Verfügbare Kommandos")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Verfügbare Kommandos")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -71,12 +74,15 @@ pub fn show_help_help(bot_data: &crate::BotData) {
     **Aliase**
     `help`, `h`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Help - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Help - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -100,12 +106,15 @@ pub fn show_help_quit(bot_data: &crate::BotData) {
     **Aliase**
     `quit`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Quit - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Quit - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -130,12 +139,15 @@ pub fn show_help_add_movie(bot_data: &crate::BotData) {
     **Aliase**
     `add_movie`, `am`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Add movie - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Add movie - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -160,12 +172,15 @@ pub fn show_help_remove_movie(bot_data: &crate::BotData) {
     **Aliase**
     `remove_movie`, `rm`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Remove movie - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Remove movie - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -193,12 +208,15 @@ pub fn show_help_watchlist(bot_data: &crate::BotData) {
     **Aliase**
     `watch_list`, `wl`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Watch list - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Watch list - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -222,12 +240,15 @@ pub fn show_help_prefix(bot_data: &crate::BotData) {
     **Aliase**
     `prefix`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Watch list - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Watch list - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -256,12 +277,15 @@ pub fn show_help_history(bot_data: &crate::BotData) {
     **Aliase**
     `history`, `hs`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: History - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: History - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -297,12 +321,15 @@ pub fn show_help_status(bot_data: &crate::BotData) {
     **Aliase**
     `set_status`, `st`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Set Status - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Set Status - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -327,12 +354,15 @@ pub fn show_help_set_status_unavailable(bot_data: &crate::BotData) {
     **Aliase**
     `unavailable`, `un`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Unavailable - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Unavailable - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -360,12 +390,15 @@ pub fn show_help_set_status_watched(bot_data: &crate::BotData) {
     **Aliase**
     `watched`, `wa`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Watched - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Watched - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -390,12 +423,15 @@ pub fn show_help_show_movie(bot_data: &crate::BotData) {
     **Aliase**
     `show_movie`, `sm`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Show Movie - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Show Movie - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -420,12 +456,15 @@ pub fn show_help_search_movie(bot_data: &crate::BotData) {
     **Aliase**
     `search_movie`, `search`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Search movie - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Search movie - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -451,12 +490,15 @@ pub fn show_help_create_vote(bot_data: &crate::BotData) {
     **Aliase**
     `create_vote`, `cv`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Create vote - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Create vote - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -483,12 +525,15 @@ pub fn show_help_send_vote(bot_data: &crate::BotData) {
     **Aliase**
     `send_vote`, `sv`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Send vote - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Send vote - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -511,12 +556,15 @@ pub fn show_help_close_vote(bot_data: &crate::BotData) {
     **Aliase**
     `close_vote`, `xv`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Close vote - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Close vote - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -542,12 +590,15 @@ pub fn show_help_movie_limit(bot_data: &crate::BotData) {
     **Aliase**
     `movie_limit`, `ml`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Movie limit - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Movie limit - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -573,12 +624,15 @@ pub fn show_help_movie_vote_limit(bot_data: &crate::BotData) {
     **Aliase**
     `movie_vote_limit`, `mvl`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Movie vote limit - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Movie vote limit - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -608,12 +662,15 @@ pub fn show_help_random_movie_vote(bot_data: &crate::BotData) {
     **Aliase**
     `random_movie_vote`, `rmv`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Random movie vote - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Random movie vote - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -638,12 +695,15 @@ pub fn show_help_close_movie_vote(bot_data: &crate::BotData) {
     **Aliase**
     `close_movie_vote`, `cmv`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Close movie vote - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Close movie vote - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -666,12 +726,15 @@ pub fn show_help_info(bot_data: &crate::BotData) {
     **Aliase**
     `info`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Info - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Info - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -694,12 +757,15 @@ pub fn show_help_save(bot_data: &crate::BotData) {
     **Aliase**
     `save`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Save - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Save - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
@@ -723,10 +789,13 @@ pub fn show_help_count_movies(bot_data: &crate::BotData) {
     **Aliase**
     `count`, `ct`";
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title(":information_source: Count - Hilfe")
-            .description(help_str)
-            .color(COLOR_INFORMATION)
-    });
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title(":information_source: Count - Hilfe")
+                .description(help_str)
+                .color(COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }

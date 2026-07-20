@@ -2,23 +2,33 @@ extern crate external_data;
 use commands::{Command, ParseCommandError, SimpleCommand};
 use discord::{self, Discord, State, model as Model, model::ServerId};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    any::Any,
+    collections::HashMap,
+    error::Error,
+    io::Write,
+    panic,
+    str::FromStr,
+    thread,
+    time::{Duration, Instant},
+};
 use tmdb::themoviedb::*;
+use tracing_subscriber::EnvFilter;
 
 mod commands;
 mod general_behaviour;
 mod help_behaviour;
 mod history_behaviour;
 mod movie_behaviour;
+mod reconnect;
 mod send_message;
 mod serde_behaviour;
 mod voting_behaviour;
 mod watch_list_behaviour;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct BotData {
     #[serde(skip)]
-    #[serde(default = "get_default_discord_struct")]
     bot: Discord,
 
     #[serde(skip)]
@@ -64,8 +74,75 @@ fn get_tmdb_struct() -> TMDb {
     }
 }
 
-fn get_default_discord_struct() -> Discord {
-    Discord::from_bot_token(external_data::DISCORD_TOKEN).expect("Bot creation from token failed")
+#[derive(Deserialize)]
+struct PersistedBotData {
+    #[serde(default)]
+    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
+
+    #[serde(default)]
+    wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
+
+    #[serde(default)]
+    votes: HashMap<u64, voting_behaviour::Vote>,
+
+    #[serde(default = "get_default_bot_user")]
+    bot_user: discord::model::User,
+
+    #[serde(default)]
+    message: Option<Model::Message>,
+
+    #[serde(default)]
+    server_roles: Vec<Model::Role>,
+
+    #[serde(default = "get_default_server_id")]
+    server_id: Model::ServerId,
+
+    custom_prefix: char,
+    movie_limit_per_user: u32,
+    movie_vote_limit: u32,
+    next_movie_id: u32,
+}
+
+impl<'de> Deserialize<'de> for BotData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserialize_bot_data(deserializer, create_discord_client)
+    }
+}
+
+fn create_discord_client() -> discord::Result<Discord> {
+    Discord::from_bot_token(external_data::DISCORD_TOKEN)
+}
+
+fn deserialize_bot_data<'de, D, E>(
+    deserializer: D,
+    create_client: impl FnOnce() -> Result<Discord, E>,
+) -> Result<BotData, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    E: std::fmt::Display,
+{
+    let persisted = PersistedBotData::deserialize(deserializer)?;
+    let bot = create_client().map_err(serde::de::Error::custom)?;
+
+    Ok(BotData {
+        bot,
+        tmdb: get_tmdb_struct(),
+        watch_list: persisted.watch_list,
+        wait_for_reaction: persisted.wait_for_reaction,
+        votes: persisted.votes,
+        bot_user: persisted.bot_user,
+        message: persisted.message,
+        server_roles: persisted.server_roles,
+        server_id: persisted.server_id,
+        adding_movie: None,
+        custom_prefix: persisted.custom_prefix,
+        movie_limit_per_user: persisted.movie_limit_per_user,
+        movie_vote_limit: persisted.movie_vote_limit,
+        next_movie_id: persisted.next_movie_id,
+    })
 }
 
 fn get_default_bot_user() -> discord::model::User {
@@ -91,14 +168,56 @@ const COLOR_INFORMATION: u64 = 0x3b88c3; // blue
 const MAX_ENTRIES_PER_PAGE: usize = 10;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn main() {
-    let bot = get_default_discord_struct();
+fn main() -> Result<(), Box<dyn Error>> {
+    initialize_observability()?;
+    run()
+}
 
-    let (mut connection, ready_event) = bot
-        .connect()
-        .expect("Establishing connection to server failed");
+fn initialize_observability() -> Result<(), Box<dyn Error>> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .try_init()
+        .map_err(std::io::Error::other)?;
 
+    let default_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let location = panic_info.location();
+        tracing::error!(
+            event = "panic",
+            payload = panic_payload_classification(panic_info.payload()),
+            location_file = location.map_or("unknown", std::panic::Location::file),
+            location_line = location.map_or(0, std::panic::Location::line),
+            "application panicked"
+        );
+        default_hook(panic_info);
+    }));
+
+    Ok(())
+}
+
+fn panic_payload_classification(payload: &(dyn Any + Send)) -> &'static str {
+    if payload.is::<String>() {
+        "string"
+    } else if payload.is::<&str>() {
+        "string_slice"
+    } else {
+        "non_string"
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
+    tracing::info!(event = "application_starting", "application starting");
+    let bot = create_discord_client()?;
+
+    let (mut connection, ready_event) = bot.connect()?;
     let mut state = State::new(ready_event);
+    tracing::info!(
+        event = "discord_connected",
+        phase = "initial",
+        bot_user_id = state.user().id.0,
+        "Discord connected"
+    );
 
     let tmdb = get_tmdb_struct();
 
@@ -120,12 +239,18 @@ fn main() {
             bot_data.tmdb = tmdb;
         }
         Err(string) => {
-            println!("{}\n", string);
-            println!("WARNING: New BotData created, because file was empty or an error occured!");
-            println!("Do you want to proceed, and risk losing data? [y/n]");
+            tracing::warn!(
+                event = "bot_data_load_failed",
+                "creating new bot data requires confirmation"
+            );
+            eprintln!("{string}\n");
+            eprint!(
+                "WARNING: New BotData created, because file was empty or an error occured!\nDo you want to proceed, and risk losing data? [y/n]\n"
+            );
+            std::io::stderr().flush()?;
             let mut answer = String::new();
-            let _ = std::io::stdin().read_line(&mut answer).unwrap();
-            println!("Answer was: {}", answer);
+            let bytes_read = std::io::stdin().read_line(&mut answer)?;
+            tracing::debug!(event = "bot_data_confirmation_received", bytes_read);
             if answer.trim() == "y" {
                 bot_data = BotData {
                     bot: bot,
@@ -149,28 +274,33 @@ fn main() {
                     movie_vote_limit: 2,
                     adding_movie: None,
                 };
-                println!("Bot is running now.");
+                tracing::info!(event = "bot_started_with_new_data");
             } else {
-                println!("Bot is shutting down now.");
-                return;
+                tracing::info!(event = "startup_cancelled");
+                return Ok(());
             }
         }
     };
 
-    let thirty_seconds = std::time::Duration::from_secs(30);
-    let one_hour = std::time::Duration::from_secs(3600);
-    let mut last_save = std::time::Instant::now();
+    let thirty_seconds = Duration::from_secs(30);
+    let one_hour = Duration::from_secs(3600);
+    let mut last_save = Instant::now();
     let mut something_changed = false;
 
     loop {
         // The last save was more than an hour ago
         if last_save.elapsed() >= one_hour {
-            last_save = std::time::Instant::now();
+            last_save = Instant::now();
 
             if something_changed {
-                // So save the bot_data and reset the last_save time
-                serde_behaviour::store_bot_data(&bot_data);
-                something_changed = false;
+                if serde_behaviour::store_bot_data_silently(&bot_data).is_ok() {
+                    something_changed = false;
+                } else {
+                    tracing::warn!(
+                        event = "hourly_bot_data_persistence_failed",
+                        "hourly bot data persistence failed"
+                    );
+                }
             }
         }
 
@@ -212,19 +342,29 @@ fn main() {
         let event = match connection.recv_event() {
             Ok(event) => event,
             Err(err) => {
-                println!("[Warning] Receive error: {:?}", err);
-                if let discord::Error::WebSocket(..) = err {
-                    // Try to reconnect when websocket connection is dropped.
-                    // If that doesn't work don't do anything, we'll try again in the next loop
-                    // iteration.
-                    if let Ok((_connection, ready_event)) = bot_data.bot.connect() {
-                        state = State::new(ready_event);
-                        println!("[Ready] Reconnected successfully.");
-                    } else {
-                        println!("[Warning] Failed to reconnect.");
+                tracing::warn!(
+                    event = "discord_event_receive_failed",
+                    "failed to receive Discord event"
+                );
+                if matches!(
+                    err,
+                    discord::Error::WebSocket(..) | discord::Error::Closed(..)
+                ) {
+                    match reconnect::reconnect_with_backoff(
+                        || bot_data.bot.connect(),
+                        thread::sleep,
+                        reconnect::RECONNECT_DELAYS,
+                    ) {
+                        Ok((new_connection, ready_event)) => {
+                            connection = new_connection;
+                            state = State::new(ready_event);
+                            tracing::info!(
+                                event = "discord_reconnected",
+                                "Discord connection restored"
+                            );
+                        }
+                        Err(reconnect_error) => return Err(Box::new(reconnect_error)),
                     }
-                } else if let discord::Error::Closed(..) = err {
-                    println!("Discord Error Closed");
                 }
                 continue;
             }
@@ -248,7 +388,10 @@ fn main() {
                     continue;
                 }
 
-                println!("Received message: {:#?}", message.content);
+                tracing::debug!(
+                    event = "discord_message_received",
+                    "received Discord message event"
+                );
 
                 // Handle the quit command first, since it needs to be within main (because of loop break)
                 if message.content
@@ -259,17 +402,31 @@ fn main() {
                     ))
                 {
                     bot_data.message = Some(message.clone());
-                    serde_behaviour::store_bot_data(&bot_data);
+                    if serde_behaviour::store_bot_data(&bot_data).is_err() {
+                        tracing::warn!(
+                            event = "quit_bot_data_persistence_failed",
+                            "failed to persist bot data before quitting"
+                        );
+                    }
 
                     general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(
                         &bot_data,
                     );
 
-                    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-                        embed
-                            .description("Ich beende mich dann mal. Tschüss. :wave:")
-                            .color(COLOR_BOT)
-                    });
+                    if bot_data
+                        .bot
+                        .send_embed(message.channel_id, "", |embed| {
+                            embed
+                                .description("Ich beende mich dann mal. Tschüss. :wave:")
+                                .color(COLOR_BOT)
+                        })
+                        .is_err()
+                    {
+                        tracing::warn!(
+                            event = "quit_confirmation_send_failed",
+                            "failed to send quit confirmation"
+                        );
+                    }
                     break;
                 }
                 // Handle all other messages that start with the prefix
@@ -277,7 +434,12 @@ fn main() {
                     bot_data.message = Some(message.clone());
 
                     // Indicate that the bot is processing the query
-                    let _ = bot_data.bot.broadcast_typing(message.channel_id);
+                    if bot_data.bot.broadcast_typing(message.channel_id).is_err() {
+                        tracing::debug!(
+                            event = "typing_indicator_failed",
+                            "failed to broadcast typing indicator"
+                        );
+                    }
                     call_behaviour(&mut bot_data);
                     something_changed = true;
                 }
@@ -382,7 +544,15 @@ fn main() {
         }
     }
 
-    let _ = connection.shutdown();
+    tracing::info!(event = "application_stopping", "application stopping");
+    if connection.shutdown().is_err() {
+        tracing::warn!(
+            event = "discord_shutdown_failed",
+            "failed to close Discord connection"
+        );
+    }
+
+    Ok(())
 }
 
 /**
@@ -395,11 +565,38 @@ fn call_behaviour(bot_data: &mut BotData) {
         return;
     }
 
-    let command_str = bot_data.message.as_ref().unwrap().content.clone();
-    let command_result = Command::from_str(command_str.as_str());
+    let Some(message) = bot_data.message.as_ref() else {
+        tracing::warn!(
+            event = "command_failed",
+            command = "unknown",
+            "command dispatch lacked message context"
+        );
+        return;
+    };
+    let command_result = Command::from_str(&message.content);
     match command_result {
-        Ok(command) => handle_command(bot_data, command),
-        Err(error) => handle_error(bot_data, error),
+        Ok(command) => {
+            let command_name = command.name();
+            tracing::info!(
+                event = "command_started",
+                command = command_name,
+                "command started"
+            );
+            handle_command(bot_data, command);
+            tracing::info!(
+                event = "command_succeeded",
+                command = command_name,
+                "command completed"
+            );
+        }
+        Err(error) => {
+            tracing::info!(
+                event = "command_rejected",
+                command = "unknown",
+                "command rejected"
+            );
+            handle_error(bot_data, error);
+        }
     }
 }
 
@@ -439,18 +636,24 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
             SimpleCommand::Save => help_behaviour::show_help_save(bot_data),
             SimpleCommand::Count => help_behaviour::show_help_count_movies(bot_data),
             SimpleCommand::Unknown(parameters) => {
-                let _ = bot_data.bot.send_embed(
-                    bot_data.message.clone().unwrap().channel_id,
-                    "",
-                    |embed| {
-                        embed
-                            .description(
-                                format!("Das Kommando `{}` existiert nicht. Deshalb kann ich dir leider keine Hilfe anzeigen.", parameters)
-                                    .as_str(),
-                            )
-                            .color(COLOR_ERROR)
-                    },
-                );
+                if bot_data
+                    .bot
+                    .send_embed(
+                        bot_data.message.clone().unwrap().channel_id,
+                        "",
+                        |embed| {
+                            embed
+                                .description(
+                                    format!("Das Kommando `{}` existiert nicht. Deshalb kann ich dir leider keine Hilfe anzeigen.", parameters)
+                                        .as_str(),
+                                )
+                                .color(COLOR_ERROR)
+                        },
+                    )
+                    .is_err()
+                {
+                    tracing::warn!(event = "help_response_send_failed", "failed to send help response");
+                }
             }
         },
         Prefix(new_prefix) => general_behaviour::set_new_prefix(bot_data, new_prefix),
@@ -478,9 +681,19 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         }
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
-        Save => serde_behaviour::store_bot_data(bot_data),
+        Save => {
+            if serde_behaviour::store_bot_data(bot_data).is_err() {
+                tracing::warn!(
+                    event = "command_bot_data_persistence_failed",
+                    "failed to persist bot data for save command"
+                );
+            }
+        }
         Count => movie_behaviour::count_movies(bot_data),
-        Quit => todo!("What needs to happen when the Quit command is received?"),
+        Quit => tracing::warn!(
+            event = "quit_command_unexpected_dispatch",
+            "quit command should be handled by the main event loop"
+        ),
     }
 }
 
@@ -490,17 +703,26 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         NoCommand => {}
         UnknownCommand => {
             let message = bot_data.message.clone().unwrap();
-            let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-                embed
-                    .description(
-                        format!(
-                            "Unbekanntes Kommando `{}`. Vielleicht vertippt? :see_no_evil:",
-                            message.content
+            if bot_data
+                .bot
+                .send_embed(message.channel_id, "", |embed| {
+                    embed
+                        .description(
+                            format!(
+                                "Unbekanntes Kommando `{}`. Vielleicht vertippt? :see_no_evil:",
+                                message.content
+                            )
+                            .as_str(),
                         )
-                        .as_str(),
-                    )
-                    .color(COLOR_ERROR)
-            });
+                        .color(COLOR_ERROR)
+                })
+                .is_err()
+            {
+                tracing::warn!(
+                    event = "unknown_command_response_send_failed",
+                    "failed to send unknown command response"
+                );
+            }
         }
         NoArgumentsForAdd => help_behaviour::show_help_add_movie(bot_data),
         NoArgumentsForRemove => help_behaviour::show_help_remove_movie(bot_data),
@@ -524,5 +746,32 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
         WrongArgumentsForMovieVoteLimit => help_behaviour::show_help_movie_vote_limit(bot_data),
         WrongArgumentsForSendVoteWithUserId => help_behaviour::show_help_send_vote(bot_data),
         WrongArgumentForRandomMovieVote => help_behaviour::show_help_random_movie_vote(bot_data),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{deserialize_bot_data, panic_payload_classification};
+
+    #[test]
+    fn deserialization_returns_client_construction_errors() {
+        let input = r#"{"custom_prefix":".","movie_limit_per_user":10,"movie_vote_limit":2,"next_movie_id":0}"#;
+        let mut deserializer = serde_json::Deserializer::from_str(input);
+
+        let result = deserialize_bot_data(&mut deserializer, || Err::<_, _>("invalid client"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn panic_payload_classification_does_not_return_payload_content() {
+        let secret = "discord-token-should-not-be-logged";
+
+        assert_eq!(panic_payload_classification(&secret), "string_slice");
+        assert_eq!(
+            panic_payload_classification(&String::from(secret)),
+            "string"
+        );
+        assert_eq!(panic_payload_classification(&42_u32), "non_string");
     }
 }
