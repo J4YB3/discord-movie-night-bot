@@ -396,8 +396,30 @@ mod tests {
     #[test]
     fn migrates_pr64_legacy_state_and_ignores_runtime_fields() {
         let path = temporary_data_file("pr64-legacy");
-        fs::write(&path, include_str!("fixtures/pr64-state.json"))
-            .expect("legacy fixture must be written");
+        let legacy = include_str!("fixtures/pr64-state.json");
+        let legacy_value: serde_json::Value =
+            serde_json::from_str(legacy).expect("legacy fixture must be valid JSON");
+        let legacy_fields = legacy_value
+            .as_object()
+            .expect("legacy fixture must be a JSON object");
+        for field in [
+            "watch_list",
+            "votes",
+            "bot_user",
+            "message",
+            "server_roles",
+            "server_id",
+            "custom_prefix",
+            "movie_limit_per_user",
+            "movie_vote_limit",
+            "next_movie_id",
+        ] {
+            assert!(legacy_fields.contains_key(field));
+        }
+        for skipped_field in ["schema_version", "wait_for_reaction", "adding_movie"] {
+            assert!(!legacy_fields.contains_key(skipped_field));
+        }
+        fs::write(&path, legacy).expect("legacy fixture must be written");
 
         let state = load_persisted_state(&path).expect("legacy state must migrate");
 
@@ -412,7 +434,16 @@ mod tests {
         save_persisted_state(&path, &state).expect("migrated state must save");
         let saved = fs::read_to_string(&path).expect("migrated state must be readable");
         assert!(saved.contains(&format!("\"schema_version\": {SCHEMA_VERSION}")));
-        assert!(!saved.contains("\"votes\""));
+        for runtime_field in [
+            "votes",
+            "bot_user",
+            "message",
+            "server_roles",
+            "wait_for_reaction",
+            "adding_movie",
+        ] {
+            assert!(!saved.contains(&format!("\"{runtime_field}\"")));
+        }
         fs::remove_file(path).expect("temporary file must be removed");
     }
 

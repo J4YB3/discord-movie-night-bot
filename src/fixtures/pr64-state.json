@@ -1,14 +1,18 @@
 {
   "watch_list": {},
+  "votes": {},
+  "bot_user": {
+    "id": 77,
+    "name": "movie-bot",
+    "discriminator": "0001",
+    "avatar": null,
+    "bot": true
+  },
+  "message": null,
+  "server_roles": [],
   "server_id": 123456789,
   "custom_prefix": "!",
   "movie_limit_per_user": 7,
   "movie_vote_limit": 3,
-  "next_movie_id": 42,
-  "votes": {"42": {"user_id": 99, "vote": true}},
-  "bot_user": {"id": 77, "name": "movie-bot"},
-  "message": {"id": 88, "content": "transient message"},
-  "server_roles": [{"id": 1, "name": "Movie Night"}],
-  "wait_for_reaction": [{"kind": "add_movie"}],
-  "adding_movie": 123456
+  "next_movie_id": 42
 }
