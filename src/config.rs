@@ -62,6 +62,10 @@ impl Config {
         &self.tmdb_api_key
     }
 
+    pub(crate) fn data_file(&self) -> &std::path::Path {
+        &self.data_file
+    }
+
     pub(crate) fn log_filter(&self) -> Option<&str> {
         self.log_filter.as_deref()
     }

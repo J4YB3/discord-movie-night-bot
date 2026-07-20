@@ -1,11 +1,10 @@
 use commands::{Command, ParseCommandError, SimpleCommand};
 use discord::{self, Discord, State, model as Model, model::ServerId};
-use serde::{Deserialize, Serialize};
+
 use std::{
     any::Any,
     collections::HashMap,
     error::Error,
-    io::Write,
     panic,
     str::FromStr,
     thread,
@@ -26,45 +25,48 @@ mod serde_behaviour;
 mod voting_behaviour;
 mod watch_list_behaviour;
 
-#[derive(Serialize)]
 pub struct BotData {
-    #[serde(skip)]
     bot: Discord,
-
-    #[serde(skip)]
-    #[serde(default = "get_tmdb_struct")]
     tmdb: TMDb,
-
-    #[serde(default)]
-    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>, // Keys are the internal movie ids
-
-    #[serde(skip)]
-    #[serde(default)]
+    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
     wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
-
-    #[serde(default)]
-    votes: HashMap<u64, voting_behaviour::Vote>, // Keys are the message_ids
-
-    #[serde(default = "get_default_bot_user")]
+    votes: HashMap<u64, voting_behaviour::Vote>,
     bot_user: discord::model::User,
-
-    #[serde(default)]
     message: Option<Model::Message>,
-
-    #[serde(default)]
     server_roles: Vec<Model::Role>,
-
-    #[serde(default = "get_default_server_id")]
     server_id: Model::ServerId,
-
-    #[serde(skip)]
-    #[serde(default)]
     adding_movie: Option<std::time::Instant>,
-
     custom_prefix: char,
     movie_limit_per_user: u32,
     movie_vote_limit: u32,
     next_movie_id: u32,
+}
+
+impl BotData {
+    fn from_persisted_state(
+        persisted: serde_behaviour::PersistedState,
+        bot: Discord,
+        tmdb: TMDb,
+        bot_user: Model::User,
+        server_roles: Vec<Model::Role>,
+    ) -> Self {
+        Self {
+            bot,
+            tmdb,
+            watch_list: persisted.watch_list,
+            wait_for_reaction: Vec::new(),
+            votes: HashMap::new(),
+            bot_user,
+            message: None,
+            server_roles,
+            server_id: persisted.server_id,
+            adding_movie: None,
+            custom_prefix: persisted.custom_prefix,
+            movie_limit_per_user: persisted.movie_limit_per_user,
+            movie_vote_limit: persisted.movie_vote_limit,
+            next_movie_id: persisted.next_movie_id,
+        }
+    }
 }
 
 fn get_tmdb_struct() -> TMDb {
@@ -74,89 +76,8 @@ fn get_tmdb_struct() -> TMDb {
     }
 }
 
-#[derive(Deserialize)]
-struct PersistedBotData {
-    #[serde(default)]
-    watch_list: HashMap<u32, movie_behaviour::WatchListEntry>,
-
-    #[serde(default)]
-    wait_for_reaction: Vec<general_behaviour::WaitingForReaction>,
-
-    #[serde(default)]
-    votes: HashMap<u64, voting_behaviour::Vote>,
-
-    #[serde(default = "get_default_bot_user")]
-    bot_user: discord::model::User,
-
-    #[serde(default)]
-    message: Option<Model::Message>,
-
-    #[serde(default)]
-    server_roles: Vec<Model::Role>,
-
-    #[serde(default = "get_default_server_id")]
-    server_id: Model::ServerId,
-
-    custom_prefix: char,
-    movie_limit_per_user: u32,
-    movie_vote_limit: u32,
-    next_movie_id: u32,
-}
-
-impl<'de> Deserialize<'de> for BotData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserialize_bot_data(deserializer, create_discord_client)
-    }
-}
-
 fn create_discord_client() -> discord::Result<Discord> {
     Discord::from_bot_token(config::get().discord_token())
-}
-
-fn deserialize_bot_data<'de, D, E>(
-    deserializer: D,
-    create_client: impl FnOnce() -> Result<Discord, E>,
-) -> Result<BotData, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    E: std::fmt::Display,
-{
-    let persisted = PersistedBotData::deserialize(deserializer)?;
-    let bot = create_client().map_err(serde::de::Error::custom)?;
-
-    Ok(BotData {
-        bot,
-        tmdb: get_tmdb_struct(),
-        watch_list: persisted.watch_list,
-        wait_for_reaction: persisted.wait_for_reaction,
-        votes: persisted.votes,
-        bot_user: persisted.bot_user,
-        message: persisted.message,
-        server_roles: persisted.server_roles,
-        server_id: persisted.server_id,
-        adding_movie: None,
-        custom_prefix: persisted.custom_prefix,
-        movie_limit_per_user: persisted.movie_limit_per_user,
-        movie_vote_limit: persisted.movie_vote_limit,
-        next_movie_id: persisted.next_movie_id,
-    })
-}
-
-fn get_default_bot_user() -> discord::model::User {
-    discord::model::User {
-        id: discord::model::UserId(827634208204783627),
-        name: String::from("Movie Night Bot"),
-        discriminator: 7301,
-        avatar: Some(String::from("7c8c90ae23711af29b91880b44fdfd4a")),
-        bot: true,
-    }
-}
-
-fn get_default_server_id() -> discord::model::ServerId {
-    discord::model::ServerId(0)
 }
 
 const COLOR_ERROR: u64 = 0xff0000; // red
@@ -200,6 +121,12 @@ fn initialize_observability() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn clear_dirty_after_save(dirty: &mut bool, succeeded: bool) {
+    if succeeded {
+        *dirty = false;
+    }
+}
+
 fn panic_payload_classification(payload: &(dyn Any + Send)) -> &'static str {
     if payload.is::<String>() {
         "string"
@@ -212,8 +139,17 @@ fn panic_payload_classification(payload: &(dyn Any + Send)) -> &'static str {
 
 fn run() -> Result<(), Box<dyn Error>> {
     tracing::info!(event = "application_starting", "application starting");
-    let bot = create_discord_client()?;
+    let persisted_state = serde_behaviour::load_persisted_state(config::get().data_file())
+        .map_err(|error| {
+            tracing::error!(
+                event = "bot_data_load_failed",
+                error_kind = "persistence_load",
+                "persisted state could not be loaded"
+            );
+            error
+        })?;
 
+    let bot = create_discord_client()?;
     let (mut connection, ready_event) = bot.connect()?;
     let mut state = State::new(ready_event);
     tracing::info!(
@@ -223,68 +159,26 @@ fn run() -> Result<(), Box<dyn Error>> {
         "Discord connected"
     );
 
-    let tmdb = get_tmdb_struct();
-
     let state_user = state.user();
-
-    let mut bot_data: BotData;
-    match serde_behaviour::read_bot_data() {
-        Ok(data) => {
-            bot_data = data;
-            // Fill the struct with the data that must be created anew on every start
-            bot_data.bot = bot;
-            bot_data.bot_user = Model::User {
-                id: state_user.id,
-                name: state_user.username.clone(),
-                discriminator: state_user.discriminator,
-                avatar: state_user.avatar.clone(),
-                bot: state_user.bot,
-            };
-            bot_data.tmdb = tmdb;
-        }
-        Err(string) => {
-            tracing::warn!(
-                event = "bot_data_load_failed",
-                "creating new bot data requires confirmation"
-            );
-            eprintln!("{string}\n");
-            eprint!(
-                "WARNING: New BotData created, because file was empty or an error occured!\nDo you want to proceed, and risk losing data? [y/n]\n"
-            );
-            std::io::stderr().flush()?;
-            let mut answer = String::new();
-            let bytes_read = std::io::stdin().read_line(&mut answer)?;
-            tracing::debug!(event = "bot_data_confirmation_received", bytes_read);
-            if answer.trim() == "y" {
-                bot_data = BotData {
-                    bot: bot,
-                    bot_user: Model::User {
-                        id: state_user.id,
-                        name: state_user.username.clone(),
-                        discriminator: state_user.discriminator,
-                        avatar: state_user.avatar.clone(),
-                        bot: state_user.bot,
-                    },
-                    message: None,
-                    watch_list: HashMap::new(),
-                    next_movie_id: 0,
-                    server_id: ServerId(0),
-                    server_roles: vec![],
-                    custom_prefix: '.',
-                    tmdb: tmdb,
-                    wait_for_reaction: vec![],
-                    votes: HashMap::new(),
-                    movie_limit_per_user: 10,
-                    movie_vote_limit: 2,
-                    adding_movie: None,
-                };
-                tracing::info!(event = "bot_started_with_new_data");
-            } else {
-                tracing::info!(event = "startup_cancelled");
-                return Ok(());
-            }
-        }
+    let bot_data_user = Model::User {
+        id: state_user.id,
+        name: state_user.username.clone(),
+        discriminator: state_user.discriminator,
+        avatar: state_user.avatar.clone(),
+        bot: state_user.bot,
     };
+    let server_roles = state
+        .servers()
+        .first()
+        .map(|server| server.roles.clone())
+        .unwrap_or_default();
+    let mut bot_data = BotData::from_persisted_state(
+        persisted_state,
+        bot,
+        get_tmdb_struct(),
+        bot_data_user,
+        server_roles,
+    );
 
     let thirty_seconds = Duration::from_secs(30);
     let one_hour = Duration::from_secs(3600);
@@ -297,11 +191,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             last_save = Instant::now();
 
             if something_changed {
-                if serde_behaviour::store_bot_data_silently(&bot_data).is_ok() {
-                    something_changed = false;
-                } else {
+                let saved = serde_behaviour::store_bot_data_silently(&bot_data).is_ok();
+                clear_dirty_after_save(&mut something_changed, saved);
+                if !saved {
                     tracing::warn!(
                         event = "hourly_bot_data_persistence_failed",
+                        error_kind = "persistence_save",
                         "hourly bot data persistence failed"
                     );
                 }
@@ -406,12 +301,6 @@ fn run() -> Result<(), Box<dyn Error>> {
                     ))
                 {
                     bot_data.message = Some(message.clone());
-                    if serde_behaviour::store_bot_data(&bot_data).is_err() {
-                        tracing::warn!(
-                            event = "quit_bot_data_persistence_failed",
-                            "failed to persist bot data before quitting"
-                        );
-                    }
 
                     general_behaviour::remove_all_reactions_on_all_waiting_for_reaction_messages(
                         &bot_data,
@@ -444,8 +333,8 @@ fn run() -> Result<(), Box<dyn Error>> {
                             "failed to broadcast typing indicator"
                         );
                     }
-                    call_behaviour(&mut bot_data);
                     something_changed = true;
+                    call_behaviour(&mut bot_data, &mut something_changed);
                 }
             }
             Model::Event::ReactionAdd(reaction) => {
@@ -548,6 +437,23 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if something_changed {
+        let saved = serde_behaviour::store_bot_data_silently(&bot_data).is_ok();
+        clear_dirty_after_save(&mut something_changed, saved);
+        if saved {
+            tracing::info!(
+                event = "final_bot_data_persistence_succeeded",
+                "final bot data persistence succeeded"
+            );
+        } else {
+            tracing::warn!(
+                event = "final_bot_data_persistence_failed",
+                error_kind = "persistence_save",
+                "final bot data persistence failed"
+            );
+        }
+    }
+
     tracing::info!(event = "application_stopping", "application stopping");
     if connection.shutdown().is_err() {
         tracing::warn!(
@@ -564,7 +470,7 @@ fn run() -> Result<(), Box<dyn Error>> {
  * behaviour function from behaviour.rs.
  */
 #[allow(unused_assignments)]
-fn call_behaviour(bot_data: &mut BotData) {
+fn call_behaviour(bot_data: &mut BotData, dirty: &mut bool) {
     if bot_data.message.is_none() {
         return;
     }
@@ -586,7 +492,7 @@ fn call_behaviour(bot_data: &mut BotData) {
                 command = command_name,
                 "command started"
             );
-            handle_command(bot_data, command);
+            handle_command(bot_data, command, dirty);
             tracing::info!(
                 event = "command_succeeded",
                 command = command_name,
@@ -604,7 +510,7 @@ fn call_behaviour(bot_data: &mut BotData) {
     }
 }
 
-fn handle_command(bot_data: &mut BotData, command: Command) {
+fn handle_command(bot_data: &mut BotData, command: Command, dirty: &mut bool) {
     use Command::*;
     match command {
         AddMovie(title) => movie_behaviour::search_movie(bot_data, title.as_str(), true),
@@ -686,9 +592,12 @@ fn handle_command(bot_data: &mut BotData, command: Command) {
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
         Save => {
-            if serde_behaviour::store_bot_data(bot_data).is_err() {
+            let saved = serde_behaviour::store_bot_data(bot_data).is_ok();
+            clear_dirty_after_save(dirty, saved);
+            if !saved {
                 tracing::warn!(
                     event = "command_bot_data_persistence_failed",
+                    error_kind = "persistence_save",
                     "failed to persist bot data for save command"
                 );
             }
@@ -755,16 +664,15 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
 
 #[cfg(test)]
 mod tests {
-    use super::{deserialize_bot_data, panic_payload_classification};
+    use super::{clear_dirty_after_save, panic_payload_classification};
 
     #[test]
-    fn deserialization_returns_client_construction_errors() {
-        let input = r#"{"custom_prefix":".","movie_limit_per_user":10,"movie_vote_limit":2,"next_movie_id":0}"#;
-        let mut deserializer = serde_json::Deserializer::from_str(input);
+    fn failed_save_keeps_the_state_dirty() {
+        let mut dirty = true;
 
-        let result = deserialize_bot_data(&mut deserializer, || Err::<_, _>("invalid client"));
+        clear_dirty_after_save(&mut dirty, false);
 
-        assert!(result.is_err());
+        assert!(dirty);
     }
 
     #[test]

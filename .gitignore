@@ -15,7 +15,6 @@
 *.code-workspace
 
 ### added manually ###
-/external_data/target/
 /*.json
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode,rust
