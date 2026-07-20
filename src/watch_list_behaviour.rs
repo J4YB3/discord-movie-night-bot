@@ -89,44 +89,57 @@ pub fn show_watch_list(bot_data: &mut crate::BotData, order: String) {
             ));
         }
     } else {
-        let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-            embed
-                .title("Filmliste")
-                .description("Es sind zur Zeit **0** Filme auf der Liste")
-                .color(COLOR_BOT)
-        });
+        crate::general_behaviour::trace_nonfatal_discord_result(
+            bot_data.bot.send_embed(message.channel_id, "", |embed| {
+                embed
+                    .title("Filmliste")
+                    .description("Es sind zur Zeit **0** Filme auf der Liste")
+                    .color(COLOR_BOT)
+            }),
+            "send_embed",
+        );
         return;
     }
 
     // We know, that this can't be none now, so unwrap the value
     let sorted_watch_list_enum = sorted_watch_list_enum_option.unwrap();
 
-    if let Ok(message) = bot_data.bot.send_embed(message.channel_id, "", |embed| {
+    match bot_data.bot.send_embed(message.channel_id, "", |embed| {
         embed
             .title("Filmliste")
             .description(watch_list_string.as_str())
             .color(COLOR_BOT)
             .footer(|footer| footer.text(format!("Seite {}/{}", 1, total_pages).as_str()))
     }) {
-        let _ = bot_data.bot.add_reaction(
-            message.channel_id,
-            message.id,
-            discord::model::ReactionEmoji::Unicode("⬅️".to_string()),
-        );
-
-        let _ = bot_data.bot.add_reaction(
-            message.channel_id,
-            message.id,
-            discord::model::ReactionEmoji::Unicode("➡️".to_string()),
-        );
-
-        bot_data.wait_for_reaction.push(
-            crate::general_behaviour::WaitingForReaction::WatchListPagination(
-                message,
-                sorted_watch_list_enum,
-                1,
-            ),
-        );
+        Ok(message) => {
+            crate::general_behaviour::trace_nonfatal_discord_result(
+                bot_data.bot.add_reaction(
+                    message.channel_id,
+                    message.id,
+                    discord::model::ReactionEmoji::Unicode("⬅️".to_string()),
+                ),
+                "add_reaction",
+            );
+            crate::general_behaviour::trace_nonfatal_discord_result(
+                bot_data.bot.add_reaction(
+                    message.channel_id,
+                    message.id,
+                    discord::model::ReactionEmoji::Unicode("➡️".to_string()),
+                ),
+                "add_reaction",
+            );
+            bot_data.wait_for_reaction.push(
+                crate::general_behaviour::WaitingForReaction::WatchListPagination(
+                    message,
+                    sorted_watch_list_enum,
+                    1,
+                ),
+            );
+        }
+        Err(error) => crate::general_behaviour::trace_nonfatal_discord_result::<(), _>(
+            Err(error),
+            "send_embed",
+        ),
     }
 }
 

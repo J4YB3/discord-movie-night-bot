@@ -267,46 +267,59 @@ pub fn send_vote_details_message(
         },
     );
 
-    if let Ok(vote_message) = vote_message {
-        // Remove the reactions from the previous message
-        remove_all_reactions_on_previous_vote(
-            bot_data,
-            vote,
-            (&vote_message.channel_id, &vote.message_id),
-        );
+    match vote_message {
+        Ok(vote_message) => {
+            // Remove the reactions from the previous message
+            remove_all_reactions_on_previous_vote(
+                bot_data,
+                vote,
+                (&vote_message.channel_id, &vote.message_id),
+            );
 
-        // Add the reactions to the message
-        for vote_option in vote.options.iter() {
-            match vote_option {
-                VoteOptionEnum::GeneralVoteOption(string_option) => {
-                    let _ = bot_data.bot.add_reaction(
-                        vote_message.channel_id,
-                        vote_message.id,
-                        discord::model::ReactionEmoji::Unicode(string_option.emoji.clone()),
-                    );
-                }
-                VoteOptionEnum::MovieVoteOption(movie_option) => {
-                    let _ = bot_data.bot.add_reaction(
-                        vote_message.channel_id,
-                        vote_message.id,
-                        discord::model::ReactionEmoji::Unicode(movie_option.emoji.clone()),
-                    );
+            // Add the reactions to the message
+            for vote_option in vote.options.iter() {
+                match vote_option {
+                    VoteOptionEnum::GeneralVoteOption(string_option) => {
+                        crate::general_behaviour::trace_nonfatal_discord_result(
+                            bot_data.bot.add_reaction(
+                                vote_message.channel_id,
+                                vote_message.id,
+                                discord::model::ReactionEmoji::Unicode(string_option.emoji.clone()),
+                            ),
+                            "add_reaction",
+                        );
+                    }
+                    VoteOptionEnum::MovieVoteOption(movie_option) => {
+                        crate::general_behaviour::trace_nonfatal_discord_result(
+                            bot_data.bot.add_reaction(
+                                vote_message.channel_id,
+                                vote_message.id,
+                                discord::model::ReactionEmoji::Unicode(movie_option.emoji.clone()),
+                            ),
+                            "add_reaction",
+                        );
+                    }
                 }
             }
+
+            // Vote already exists in the bot_data, so remove the previous entry from the bot_data
+            if vote.message_id != discord::model::MessageId(0) {
+                bot_data.votes.remove(&vote.message_id.0);
+            }
+
+            // Independent of the previous state, set the message_id and insert the (new) vote into bot_data
+            vote.message_id = vote_message.id;
+            bot_data.votes.insert(vote_message.id.0, vote.clone());
+
+            Some(vote_message)
         }
-
-        // Vote already exists in the bot_data, so remove the previous entry from the bot_data
-        if vote.message_id != discord::model::MessageId(0) {
-            bot_data.votes.remove(&vote.message_id.0);
+        Err(error) => {
+            crate::general_behaviour::trace_nonfatal_discord_result::<(), _>(
+                Err(error),
+                "send_embed",
+            );
+            None
         }
-
-        // Independent of the previous state, set the message_id and insert the (new) vote into bot_data
-        vote.message_id = vote_message.id;
-        bot_data.votes.insert(vote_message.id.0, vote.clone());
-
-        return Some(vote_message);
-    } else {
-        return None;
     }
 }
 
@@ -416,12 +429,21 @@ pub fn remove_all_reactions_on_previous_vote(
             VoteOptionEnum::MovieVoteOption(movie_option) => movie_option.emoji.clone(),
         };
 
-        let _ = bot_data.bot.delete_reaction(
-            *channel_and_message_id.0,
-            *channel_and_message_id.1,
-            None,
-            discord::model::ReactionEmoji::Unicode(emoji_string),
-        );
+        if bot_data
+            .bot
+            .delete_reaction(
+                *channel_and_message_id.0,
+                *channel_and_message_id.1,
+                None,
+                discord::model::ReactionEmoji::Unicode(emoji_string),
+            )
+            .is_err()
+        {
+            tracing::warn!(
+                operation = "delete_reaction",
+                "Discord cleanup operation failed"
+            );
+        }
     }
 }
 
@@ -464,12 +486,21 @@ pub fn update_vote(
                 &reaction.message_id,
             );
 
-            let _ = bot_data.bot.delete_reaction(
-                reaction.channel_id,
-                reaction.message_id,
-                Some(reaction.user_id),
-                reaction.emoji.clone(),
-            );
+            if bot_data
+                .bot
+                .delete_reaction(
+                    reaction.channel_id,
+                    reaction.message_id,
+                    Some(reaction.user_id),
+                    reaction.emoji.clone(),
+                )
+                .is_err()
+            {
+                tracing::warn!(
+                    operation = "delete_reaction",
+                    "Discord cleanup operation failed"
+                );
+            }
         } else {
             send_message::emoji_not_part_of_vote_info(bot_data);
         }
@@ -533,13 +564,24 @@ fn update_user_choice(
                     option_user_list.remove(idx);
                 } else {
                     // The user has already voted for this option, so send him a private message
-                    if let Ok(private_channel) = bot.create_private_channel(reaction.user_id) {
-                        let _ = bot.send_embed(private_channel.id, "", |embed| {
-                            embed
-                                .title("Bereits abgestimmt.")
-                                .description("Du hast bereits für diese Option abgestimmt.")
-                                .color(crate::COLOR_INFORMATION)
-                        });
+                    match bot.create_private_channel(reaction.user_id) {
+                        Ok(private_channel) => {
+                            crate::general_behaviour::trace_nonfatal_discord_result(
+                                bot.send_embed(private_channel.id, "", |embed| {
+                                    embed
+                                        .title("Bereits abgestimmt.")
+                                        .description("Du hast bereits für diese Option abgestimmt.")
+                                        .color(crate::COLOR_INFORMATION)
+                                }),
+                                "send_embed",
+                            )
+                        }
+                        Err(error) => {
+                            crate::general_behaviour::trace_nonfatal_discord_result::<(), _>(
+                                Err(error),
+                                "create_private_channel",
+                            )
+                        }
                     }
                 }
             }
@@ -584,30 +626,38 @@ fn update_vote_embed(
 ) {
     let embed_description: String = build_vote_embed_description(vote);
 
-    let _ = bot.edit_embed(*channel_id, *message_id, |embed| {
-        embed
-            .title(format!("{}", vote.title).as_str())
-            .description(embed_description.as_str())
-            .author(|author_builder| {
-                if let Some(avatar_url) = vote.creator.avatar_url() {
-                    author_builder
-                        .name(vote.creator.name.as_str())
-                        .icon_url(avatar_url.as_str())
-                } else {
-                    author_builder.name(vote.creator.name.as_str())
-                }
-            })
-            .footer(|footer| {
-                footer.text(
-                    format!(
-                        "Um abzustimmen reagiere bitte auf diese Nachricht • {}",
-                        crate::general_behaviour::timestamp_to_string(&vote.creation_date, false)
+    if bot
+        .edit_embed(*channel_id, *message_id, |embed| {
+            embed
+                .title(format!("{}", vote.title).as_str())
+                .description(embed_description.as_str())
+                .author(|author_builder| {
+                    if let Some(avatar_url) = vote.creator.avatar_url() {
+                        author_builder
+                            .name(vote.creator.name.as_str())
+                            .icon_url(avatar_url.as_str())
+                    } else {
+                        author_builder.name(vote.creator.name.as_str())
+                    }
+                })
+                .footer(|footer| {
+                    footer.text(
+                        format!(
+                            "Um abzustimmen reagiere bitte auf diese Nachricht • {}",
+                            crate::general_behaviour::timestamp_to_string(
+                                &vote.creation_date,
+                                false
+                            )
+                        )
+                        .as_str(),
                     )
-                    .as_str(),
-                )
-            })
-            .color(crate::COLOR_BOT)
-    });
+                })
+                .color(crate::COLOR_BOT)
+        })
+        .is_err()
+    {
+        tracing::warn!(operation = "edit_embed", "Discord vote update failed");
+    }
 }
 
 /**
@@ -635,7 +685,9 @@ pub fn close_vote(bot_data: &mut crate::BotData) {
             // Send the vote summary message
             if let Some(_) = send_vote_summary_message(bot_data, vote) {
                 remove_previous_vote_from_wait_for_reaction(bot_data, &previous_message_id);
-                let _ = bot_data.votes.remove(&previous_message_id.0);
+                // Removing an in-memory vote has no fallible I/O result.
+                let removed_vote = bot_data.votes.remove(&previous_message_id.0);
+                drop(removed_vote);
             } else {
                 send_message::vote_message_failed_to_send_error(bot_data);
             }
@@ -657,7 +709,7 @@ fn send_vote_summary_message(
     let mut embed_description = String::from(format!("**{}**", vote.title));
     embed_description.push_str(build_vote_embed_description(vote).as_str());
 
-    if let Ok(message) = bot_data.bot.send_embed(
+    match bot_data.bot.send_embed(
         bot_data
             .message
             .clone()
@@ -680,9 +732,14 @@ fn send_vote_summary_message(
                 .color(crate::COLOR_SUCCESS)
         },
     ) {
-        Some(message.id)
-    } else {
-        None
+        Ok(message) => Some(message.id),
+        Err(error) => {
+            crate::general_behaviour::trace_nonfatal_discord_result::<(), _>(
+                Err(error),
+                "send_embed",
+            );
+            None
+        }
     }
 }
 
@@ -704,48 +761,54 @@ pub fn set_movie_vote_limit(bot_data: &mut crate::BotData, new_limit: u32) {
     let old_limit = bot_data.movie_vote_limit;
     bot_data.movie_vote_limit = new_limit;
 
-    let _ = bot_data.bot.send_embed(message.channel_id, "", |embed| {
-        embed
-            .title("Filmlimit für Abstimmungen aktualisiert")
-            .description(
-                format!(
-                    "Das Filmlimit für Filmabstimmungen wurde von `{}` auf `{}` geändert.",
-                    old_limit, new_limit
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(message.channel_id, "", |embed| {
+            embed
+                .title("Filmlimit für Abstimmungen aktualisiert")
+                .description(
+                    format!(
+                        "Das Filmlimit für Filmabstimmungen wurde von `{}` auf `{}` geändert.",
+                        old_limit, new_limit
+                    )
+                    .as_str(),
                 )
-                .as_str(),
-            )
-            .color(crate::COLOR_INFORMATION)
-    });
+                .color(crate::COLOR_INFORMATION)
+        }),
+        "send_embed",
+    );
 }
 
 /**
  * Sends a message showing the current movie vote limit
  */
 pub fn show_movie_vote_limit(bot_data: &crate::BotData) {
-    let _ = bot_data.bot.send_embed(
-        bot_data
-            .message
-            .clone()
-            .expect("Passing of message to show_movie_vote_limit function failed.")
-            .channel_id,
-        "",
-        |embed| {
-            embed
-                .title("Filmlimit für Abstimmungen")
-                .description(
-                    format!(
-                        "Das aktuelle Filmlimit für Abstimmungen beträgt `{}` {}.",
-                        bot_data.movie_vote_limit,
-                        if bot_data.movie_vote_limit == 1 {
-                            "Film"
-                        } else {
-                            "Filme"
-                        }
+    crate::general_behaviour::trace_nonfatal_discord_result(
+        bot_data.bot.send_embed(
+            bot_data
+                .message
+                .clone()
+                .expect("Passing of message to show_movie_vote_limit function failed.")
+                .channel_id,
+            "",
+            |embed| {
+                embed
+                    .title("Filmlimit für Abstimmungen")
+                    .description(
+                        format!(
+                            "Das aktuelle Filmlimit für Abstimmungen beträgt `{}` {}.",
+                            bot_data.movie_vote_limit,
+                            if bot_data.movie_vote_limit == 1 {
+                                "Film"
+                            } else {
+                                "Filme"
+                            }
+                        )
+                        .as_str(),
                     )
-                    .as_str(),
-                )
-                .color(crate::COLOR_INFORMATION)
-        },
+                    .color(crate::COLOR_INFORMATION)
+            },
+        ),
+        "send_embed",
     );
 }
 
@@ -909,7 +972,9 @@ pub fn close_random_movie_vote(bot_data: &mut crate::BotData) {
         // Send the vote summary message
         if let Some(_) = send_random_movie_vote_summary_message(bot_data, vote) {
             remove_previous_vote_from_wait_for_reaction(bot_data, &previous_message_id);
-            let _ = bot_data.votes.remove(&previous_message_id.0);
+            // Removing an in-memory vote has no fallible I/O result.
+            let removed_vote = bot_data.votes.remove(&previous_message_id.0);
+            drop(removed_vote);
         } else {
             send_message::vote_message_failed_to_send_error(bot_data);
         }
@@ -925,28 +990,31 @@ fn send_random_movie_vote_summary_message(
     vote: &Vote,
 ) -> Option<discord::model::MessageId> {
     if let Some(movie_vote_winner) = determine_movie_vote_winner(vote) {
-        let _ = bot_data.bot.send_embed(
-            bot_data
-                .message
-                .clone()
-                .expect("Passing message to send_random_movie_vote_summary_message failed.")
-                .channel_id,
-            "",
-            |embed| {
-                embed
-                    .title("Gewinner")
-                    .description("Der folgende Film hat die Abstimmung gewonnen:")
-                    .author(|author_builder| {
-                        if let Some(avatar_url) = vote.creator.avatar_url() {
-                            author_builder
-                                .name(vote.creator.name.as_str())
-                                .icon_url(avatar_url.as_str())
-                        } else {
-                            author_builder.name(vote.creator.name.as_str())
-                        }
-                    })
-                    .color(crate::COLOR_SUCCESS)
-            },
+        crate::general_behaviour::trace_nonfatal_discord_result(
+            bot_data.bot.send_embed(
+                bot_data
+                    .message
+                    .clone()
+                    .expect("Passing message to send_random_movie_vote_summary_message failed.")
+                    .channel_id,
+                "",
+                |embed| {
+                    embed
+                        .title("Gewinner")
+                        .description("Der folgende Film hat die Abstimmung gewonnen:")
+                        .author(|author_builder| {
+                            if let Some(avatar_url) = vote.creator.avatar_url() {
+                                author_builder
+                                    .name(vote.creator.name.as_str())
+                                    .icon_url(avatar_url.as_str())
+                            } else {
+                                author_builder.name(vote.creator.name.as_str())
+                            }
+                        })
+                        .color(crate::COLOR_SUCCESS)
+                },
+            ),
+            "send_embed",
         );
 
         use crate::movie_behaviour::find_id_by_tmdb_id;
@@ -958,34 +1026,44 @@ fn send_random_movie_vote_summary_message(
             // If the id was found, try to retreive the entry
             if let Some(movie_entry) = bot_data.watch_list.get(&watch_list_id_of_winner) {
                 // If this also worked, send the message
-                if let Ok(message) =
-                    send_message::movie_information(bot_data, movie_entry, false, false, true)
-                {
-                    // If the message could be sent, add the reactions to the bot_data
-                    let _ = bot_data.bot.add_reaction(
-                        message.channel_id,
-                        message.id,
-                        discord::model::ReactionEmoji::Unicode(String::from("✅")),
-                    );
+                match send_message::movie_information(bot_data, movie_entry, false, false, true) {
+                    Ok(message) => {
+                        // If the message could be sent, add the reactions to the bot_data
+                        crate::general_behaviour::trace_nonfatal_discord_result(
+                            bot_data.bot.add_reaction(
+                                message.channel_id,
+                                message.id,
+                                discord::model::ReactionEmoji::Unicode(String::from("✅")),
+                            ),
+                            "add_reaction",
+                        );
 
-                    let _ = bot_data.bot.add_reaction(
-                        message.channel_id,
-                        message.id,
-                        discord::model::ReactionEmoji::Unicode(String::from("❎")),
-                    );
+                        crate::general_behaviour::trace_nonfatal_discord_result(
+                            bot_data.bot.add_reaction(
+                                message.channel_id,
+                                message.id,
+                                discord::model::ReactionEmoji::Unicode(String::from("❎")),
+                            ),
+                            "add_reaction",
+                        );
 
-                    bot_data.wait_for_reaction.push(
-                        crate::general_behaviour::WaitingForReaction::AddMovieToWatched(
-                            message.clone(),
-                            movie_entry.movie.clone(),
-                        ),
-                    );
+                        bot_data.wait_for_reaction.push(
+                            crate::general_behaviour::WaitingForReaction::AddMovieToWatched(
+                                message.clone(),
+                                movie_entry.movie.clone(),
+                            ),
+                        );
 
-                    // Now return the message id
-                    return Some(message.id);
-                } else {
-                    // If the message couldn't be sent, send an error message
-                    send_message::sending_of_movie_information_message_failed_error(bot_data);
+                        // Now return the message id
+                        return Some(message.id);
+                    }
+                    Err(error) => {
+                        crate::general_behaviour::trace_nonfatal_discord_result::<(), _>(
+                            Err(error),
+                            "send_movie_information",
+                        );
+                        send_message::sending_of_movie_information_message_failed_error(bot_data);
+                    }
                 }
             }
             // If the entry couldn't be found, send an error message

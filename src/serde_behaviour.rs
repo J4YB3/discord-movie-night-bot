@@ -1,33 +1,96 @@
 use crate::send_message;
 use serde_json;
+use std::io::Write;
+
+#[derive(Debug)]
+pub enum StoreBotDataError {
+    Serialization,
+    OpenFile,
+    Write,
+}
 
 /**
- * Tries to store the bot data. Sends an error message if it failed. Otherwise the file is written
+ * Tries to store the bot data and preserves the existing command feedback.
  */
-pub fn store_bot_data(bot_data: &crate::BotData) {
-    // Try to serialize the bot_data
-    let serialize_result = serde_json::to_string_pretty(bot_data);
+pub fn store_bot_data(bot_data: &crate::BotData) -> Result<(), StoreBotDataError> {
+    store_bot_data_with_feedback(bot_data, true)
+}
 
-    if let Err(error) = serialize_result {
-        send_message::read_store_data_error(bot_data, error);
-        return;
-    }
+/**
+ * Tries to store the bot data without sending a user-facing Discord message.
+ */
+pub fn store_bot_data_silently(bot_data: &crate::BotData) -> Result<(), StoreBotDataError> {
+    store_bot_data_with_feedback(bot_data, false)
+}
 
-    // Here serialize_result must be valid, so unwrap it
-    let serialized_bot_data = serialize_result.unwrap();
+fn store_bot_data_with_feedback(
+    bot_data: &crate::BotData,
+    send_feedback: bool,
+) -> Result<(), StoreBotDataError> {
+    tracing::info!(
+        event = "persistence_started",
+        "bot data persistence started"
+    );
+    let serialized_bot_data = match serde_json::to_string_pretty(bot_data) {
+        Ok(serialized_bot_data) => serialized_bot_data,
+        Err(error) => {
+            if send_feedback {
+                send_message::read_store_data_error(bot_data, error);
+            }
+            tracing::warn!(
+                event = "persistence_failed",
+                stage = "serialization",
+                "bot data persistence failed"
+            );
+            return Err(StoreBotDataError::Serialization);
+        }
+    };
 
-    match open_data_file(true) {
-        Ok(mut file) => {
-            use std::io::Write;
+    let file = match open_data_file(true) {
+        Ok(file) => file,
+        Err(error) => {
+            if send_feedback {
+                send_message::open_file_error(bot_data, error);
+            }
+            tracing::warn!(
+                event = "persistence_failed",
+                stage = "open",
+                "bot data persistence failed"
+            );
+            return Err(StoreBotDataError::OpenFile);
+        }
+    };
 
-            if let Err(error) = file.write_all(serialized_bot_data.as_bytes()) {
-                send_message::write_error(bot_data, error);
-            } else {
+    match write_serialized_bot_data(file, &serialized_bot_data) {
+        Ok(()) => {
+            if send_feedback {
                 send_message::data_saved_successfully(bot_data);
             }
+            tracing::info!(
+                event = "persistence_succeeded",
+                "bot data persistence succeeded"
+            );
+            Ok(())
         }
-        Err(error) => send_message::open_file_error(bot_data, error),
+        Err(error) => {
+            if send_feedback {
+                send_message::write_error(bot_data, error);
+            }
+            tracing::warn!(
+                event = "persistence_failed",
+                stage = "write",
+                "bot data persistence failed"
+            );
+            Err(StoreBotDataError::Write)
+        }
     }
+}
+
+fn write_serialized_bot_data(
+    mut writer: impl Write,
+    serialized_bot_data: &str,
+) -> std::io::Result<()> {
+    writer.write_all(serialized_bot_data.as_bytes())
 }
 
 /**
@@ -65,4 +128,27 @@ fn open_data_file(truncate: bool) -> Result<std::fs::File, std::io::Error> {
         .create(true)
         .truncate(truncate)
         .open("discord_movie_night_bot_data.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_serialized_bot_data;
+    use std::io::{self, Write};
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::other("write failed"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn write_serialized_bot_data_returns_write_failures() {
+        assert!(write_serialized_bot_data(FailingWriter, "{}").is_err());
+    }
 }
