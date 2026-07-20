@@ -1,32 +1,83 @@
 name: CI
-
 on:
   pull_request:
+  merge_group:
   push:
-    branches:
-      - main
-
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
-
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+  RUST_BACKTRACE: '1'
 jobs:
-  verify:
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      - name: Install Rust toolchain
-        run: rustup toolchain install 1.97.1 --profile minimal --component clippy,rustfmt
-      - name: Select Rust toolchain
-        run: rustup default 1.97.1
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings -A clippy::absurd_extreme_comparisons -A clippy::cmp_owned -A clippy::collapsible_if -A clippy::comparison_to_empty -A clippy::empty_line_after_doc_comments -A clippy::enum_variant_names -A clippy::expect_used -A clippy::explicit_counter_loop -A clippy::for_kv_map -A clippy::large_enum_variant -A clippy::len_zero -A clippy::manual_find -A clippy::manual_map -A clippy::match_like_matches_macro -A clippy::needless_bool -A clippy::needless_borrow -A clippy::needless_range_loop -A clippy::needless_return -A clippy::ptr_arg -A clippy::question_mark -A clippy::redundant_field_names -A clippy::redundant_pattern_matching -A clippy::single_component_path_imports -A clippy::unnecessary_unwrap -A clippy::unwrap_used -A clippy::useless_conversion -A clippy::useless_format
-      - name: Run tests
-        run: cargo test --workspace --all-features --locked
-      - name: Build documentation
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked
-      - name: Check dependencies
-        run: cargo deny check
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with: { toolchain: '1.97.1', components: 'rustfmt,clippy' }
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with: { shared-key: quality }
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings -A clippy::absurd_extreme_comparisons -A clippy::cmp_owned -A clippy::collapsible_if -A clippy::comparison_to_empty -A clippy::empty_line_after_doc_comments -A clippy::enum_variant_names -A clippy::expect_used -A clippy::explicit_counter_loop -A clippy::for_kv_map -A clippy::large_enum_variant -A clippy::len_zero -A clippy::manual_find -A clippy::manual_map -A clippy::match_like_matches_macro -A clippy::needless_bool -A clippy::needless_borrow -A clippy::needless_range_loop -A clippy::needless_return -A clippy::ptr_arg -A clippy::question_mark -A clippy::redundant_field_names -A clippy::redundant_pattern_matching -A clippy::single_component_path_imports -A clippy::unnecessary_unwrap -A clippy::unwrap_used -A clippy::useless_conversion -A clippy::useless_format
+      - env: { RUSTDOCFLAGS: '-D warnings' }
+        run: cargo doc --workspace --all-features --no-deps --locked
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with: { toolchain: '1.97.1' }
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with: { tool: cargo-nextest }
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with: { shared-key: tests }
+      - run: cargo nextest run --workspace --all-features --locked
+  dependencies:
+    name: Dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
+        with: { arguments: --all-features }
+  change-risk:
+    name: Change risk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, security-events: write }
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with: { toolchain: stable, components: llvm-tools-preview }
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with: { tool: 'cargo-llvm-cov,cargo-crap' }
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with: { shared-key: change-risk }
+      - run: cargo llvm-cov --workspace --all-features --locked --lcov --output-path lcov.info
+      - run: cargo crap --workspace --lcov lcov.info --format sarif --output crap.sarif
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: { name: lcov, path: lcov.info }
+      - uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06
+        with: { sarif_file: crap.sarif, category: cargo-crap }
+  ci-success:
+    name: CI
+    if: always()
+    needs: [quality, tests, dependencies, change-risk]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          QUALITY: ${{ needs.quality.result }}
+          TESTS: ${{ needs.tests.result }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+          CHANGE_RISK: ${{ needs.change-risk.result }}
+        run: test "$QUALITY" = success && test "$TESTS" = success && test "$DEPENDENCIES" = success && test "$CHANGE_RISK" = success
