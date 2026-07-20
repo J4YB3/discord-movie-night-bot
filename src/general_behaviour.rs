@@ -158,38 +158,16 @@ pub fn reaction_emojis_equal(
     first: &discord::model::ReactionEmoji,
     second: &discord::model::ReactionEmoji,
 ) -> bool {
-    if let discord::model::ReactionEmoji::Unicode(first_string) = first {
-        if let discord::model::ReactionEmoji::Unicode(second_string) = second {
-            first_string == second_string
-        } else {
-            false
-        }
-    } else {
-        if let discord::model::ReactionEmoji::Unicode(_) = second {
-            false
-        } else {
-            if let discord::model::ReactionEmoji::Custom {
-                name: _,
-                id: first_id,
-            } = first
-            {
-                if let discord::model::ReactionEmoji::Custom {
-                    name: _,
-                    id: second_id,
-                } = second
-                {
-                    first_id == second_id
-                }
-                // If the second emoji is none of its two enum options return false
-                else {
-                    false
-                }
-            }
-            // If the first emoji is none of its two enum options return false
-            else {
-                false
-            }
-        }
+    match (first, second) {
+        (
+            discord::model::ReactionEmoji::Unicode(first),
+            discord::model::ReactionEmoji::Unicode(second),
+        ) => first == second,
+        (
+            discord::model::ReactionEmoji::Custom { id: first, .. },
+            discord::model::ReactionEmoji::Custom { id: second, .. },
+        ) => first == second,
+        _ => false,
     }
 }
 
