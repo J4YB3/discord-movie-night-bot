@@ -6,6 +6,7 @@ use std::{
     collections::HashMap,
     error::Error,
     panic,
+    path::Path,
     str::FromStr,
     thread,
     time::{Duration, Instant},
@@ -127,6 +128,29 @@ fn clear_dirty_after_save(dirty: &mut bool, succeeded: bool) {
     }
 }
 
+fn load_state_and_create_client<T, F>(
+    path: &Path,
+    client_factory: F,
+) -> Result<(serde_behaviour::PersistedState, T), Box<dyn Error>>
+where
+    F: FnOnce() -> Result<T, Box<dyn Error>>,
+{
+    let persisted_state = serde_behaviour::load_persisted_state(path)?;
+    let client = client_factory()?;
+    Ok((persisted_state, client))
+}
+
+fn log_persistence_failure(event: &'static str, error: &serde_behaviour::PersistenceError) {
+    tracing::warn!(
+        event,
+        error = %error,
+        persistence_stage = error.stage(),
+        persistence_path = ?error.path(),
+        persistence_error_kind = ?error.io_kind(),
+        "bot data persistence failed"
+    );
+}
+
 fn panic_payload_classification(payload: &(dyn Any + Send)) -> &'static str {
     if payload.is::<String>() {
         "string"
@@ -139,17 +163,22 @@ fn panic_payload_classification(payload: &(dyn Any + Send)) -> &'static str {
 
 fn run() -> Result<(), Box<dyn Error>> {
     tracing::info!(event = "application_starting", "application starting");
-    let persisted_state = serde_behaviour::load_persisted_state(config::get().data_file())
-        .map_err(|error| {
+    let (persisted_state, bot) = load_state_and_create_client(config::get().data_file(), || {
+        create_discord_client().map_err(|error| Box::new(error) as Box<dyn Error>)
+    })
+    .map_err(|error| {
+        if let Some(persistence_error) = error.downcast_ref::<serde_behaviour::PersistenceError>() {
             tracing::error!(
                 event = "bot_data_load_failed",
-                error_kind = "persistence_load",
+                error = %persistence_error,
+                persistence_stage = persistence_error.stage(),
+                persistence_path = ?persistence_error.path(),
+                persistence_error_kind = ?persistence_error.io_kind(),
                 "persisted state could not be loaded"
             );
-            error
-        })?;
-
-    let bot = create_discord_client()?;
+        }
+        error
+    })?;
     let (mut connection, ready_event) = bot.connect()?;
     let mut state = State::new(ready_event);
     tracing::info!(
@@ -191,14 +220,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             last_save = Instant::now();
 
             if something_changed {
-                let saved = serde_behaviour::store_bot_data_silently(&bot_data).is_ok();
-                clear_dirty_after_save(&mut something_changed, saved);
-                if !saved {
-                    tracing::warn!(
-                        event = "hourly_bot_data_persistence_failed",
-                        error_kind = "persistence_save",
-                        "hourly bot data persistence failed"
-                    );
+                match serde_behaviour::store_bot_data_silently(&bot_data) {
+                    Ok(()) => clear_dirty_after_save(&mut something_changed, true),
+                    Err(error) => {
+                        clear_dirty_after_save(&mut something_changed, false);
+                        log_persistence_failure("hourly_bot_data_persistence_failed", &error);
+                    }
                 }
             }
         }
@@ -438,19 +465,18 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     if something_changed {
-        let saved = serde_behaviour::store_bot_data_silently(&bot_data).is_ok();
-        clear_dirty_after_save(&mut something_changed, saved);
-        if saved {
-            tracing::info!(
-                event = "final_bot_data_persistence_succeeded",
-                "final bot data persistence succeeded"
-            );
-        } else {
-            tracing::warn!(
-                event = "final_bot_data_persistence_failed",
-                error_kind = "persistence_save",
-                "final bot data persistence failed"
-            );
+        match serde_behaviour::store_bot_data_silently(&bot_data) {
+            Ok(()) => {
+                clear_dirty_after_save(&mut something_changed, true);
+                tracing::info!(
+                    event = "final_bot_data_persistence_succeeded",
+                    "final bot data persistence succeeded"
+                );
+            }
+            Err(error) => {
+                clear_dirty_after_save(&mut something_changed, false);
+                log_persistence_failure("final_bot_data_persistence_failed", &error);
+            }
         }
     }
 
@@ -591,17 +617,13 @@ fn handle_command(bot_data: &mut BotData, command: Command, dirty: &mut bool) {
         }
         CloseMovieVote => voting_behaviour::close_random_movie_vote(bot_data),
         Info => send_message::info(bot_data),
-        Save => {
-            let saved = serde_behaviour::store_bot_data(bot_data).is_ok();
-            clear_dirty_after_save(dirty, saved);
-            if !saved {
-                tracing::warn!(
-                    event = "command_bot_data_persistence_failed",
-                    error_kind = "persistence_save",
-                    "failed to persist bot data for save command"
-                );
+        Save => match serde_behaviour::store_bot_data(bot_data) {
+            Ok(()) => clear_dirty_after_save(dirty, true),
+            Err(error) => {
+                clear_dirty_after_save(dirty, false);
+                log_persistence_failure("command_bot_data_persistence_failed", &error);
             }
-        }
+        },
         Count => movie_behaviour::count_movies(bot_data),
         Quit => tracing::warn!(
             event = "quit_command_unexpected_dispatch",
@@ -664,7 +686,22 @@ fn handle_error(bot_data: &BotData, error: ParseCommandError) {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_dirty_after_save, panic_payload_classification};
+    use super::{
+        clear_dirty_after_save, load_state_and_create_client, panic_payload_classification,
+    };
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temporary_data_file(test_name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock must be after Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("discord-movie-night-{test_name}-{unique}.json"))
+    }
 
     #[test]
     fn failed_save_keeps_the_state_dirty() {
@@ -673,6 +710,25 @@ mod tests {
         clear_dirty_after_save(&mut dirty, false);
 
         assert!(dirty);
+    }
+
+    #[test]
+    fn corrupt_startup_state_returns_before_creating_a_discord_client() {
+        let path = temporary_data_file("corrupt-startup");
+        fs::write(&path, "{ definitely not json").expect("corrupt fixture must be written");
+
+        let error =
+            load_state_and_create_client(&path, || -> Result<(), Box<dyn std::error::Error>> {
+                panic!("Discord client factory must not be called for corrupt state")
+            })
+            .expect_err("corrupt state must prevent client creation");
+
+        assert!(
+            error
+                .to_string()
+                .contains("cannot parse persisted state JSON")
+        );
+        fs::remove_file(path).expect("temporary file must be removed");
     }
 
     #[test]

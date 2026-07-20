@@ -1,9 +1,10 @@
 use crate::send_message;
+use atomic_write_file::AtomicWriteFile;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
     fmt,
-    fs::{self, File, OpenOptions},
+    fs::File,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
@@ -53,49 +54,97 @@ impl From<&crate::BotData> for PersistedState {
 pub(crate) enum PersistenceError {
     Read {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
     Parse {
         path: PathBuf,
         line: usize,
         column: usize,
+        source: serde_json::Error,
     },
     UnsupportedSchema {
         path: PathBuf,
         version: u32,
     },
-    Serialize,
+    Serialize {
+        source: serde_json::Error,
+    },
     CreateTemp {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
     WriteTemp {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
     FlushTemp {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
     SyncTemp {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
-    Rename {
+    Commit {
         path: PathBuf,
-        kind: io::ErrorKind,
+        source: io::Error,
     },
+}
+
+impl PersistenceError {
+    pub(crate) fn stage(&self) -> &'static str {
+        match self {
+            Self::Read { .. } => "read",
+            Self::Parse { .. } => "parse",
+            Self::UnsupportedSchema { .. } => "schema_validation",
+            Self::Serialize { .. } => "serialize",
+            Self::CreateTemp { .. } => "create_temp",
+            Self::WriteTemp { .. } => "write_temp",
+            Self::FlushTemp { .. } => "flush_temp",
+            Self::SyncTemp { .. } => "sync_temp",
+            Self::Commit { .. } => "commit",
+        }
+    }
+
+    pub(crate) fn path(&self) -> Option<&Path> {
+        match self {
+            Self::Read { path, .. }
+            | Self::Parse { path, .. }
+            | Self::UnsupportedSchema { path, .. }
+            | Self::CreateTemp { path, .. }
+            | Self::WriteTemp { path, .. }
+            | Self::FlushTemp { path, .. }
+            | Self::SyncTemp { path, .. }
+            | Self::Commit { path, .. } => Some(path),
+            Self::Serialize { .. } => None,
+        }
+    }
+
+    pub(crate) fn io_kind(&self) -> Option<io::ErrorKind> {
+        match self {
+            Self::Read { source, .. }
+            | Self::CreateTemp { source, .. }
+            | Self::WriteTemp { source, .. }
+            | Self::FlushTemp { source, .. }
+            | Self::SyncTemp { source, .. }
+            | Self::Commit { source, .. } => Some(source.kind()),
+            Self::Parse { .. } | Self::UnsupportedSchema { .. } | Self::Serialize { .. } => None,
+        }
+    }
 }
 
 impl fmt::Display for PersistenceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Read { path, kind } => write!(
+            Self::Read { path, source } => write!(
                 formatter,
-                "cannot read persisted state at {} ({kind})",
-                path.display()
+                "cannot read persisted state at {} ({})",
+                path.display(),
+                source.kind()
             ),
-            Self::Parse { path, line, column } => write!(
+            Self::Parse {
+                path, line, column, ..
+            } => write!(
                 formatter,
                 "cannot parse persisted state JSON at {} (line {line}, column {column})",
                 path.display()
@@ -105,37 +154,55 @@ impl fmt::Display for PersistenceError {
                 "unsupported schema version {version} in persisted state at {}",
                 path.display()
             ),
-            Self::Serialize => formatter.write_str("cannot serialize persisted state"),
-            Self::CreateTemp { path, kind } => write!(
+            Self::Serialize { .. } => formatter.write_str("cannot serialize persisted state"),
+            Self::CreateTemp { path, source } => write!(
                 formatter,
-                "cannot create temporary persisted state file beside {} ({kind})",
-                path.display()
+                "cannot create temporary persisted state file beside {} ({})",
+                path.display(),
+                source.kind()
             ),
-            Self::WriteTemp { path, kind } => write!(
+            Self::WriteTemp { path, source } => write!(
                 formatter,
-                "cannot write temporary persisted state file for {} ({kind})",
-                path.display()
+                "cannot write temporary persisted state file for {} ({})",
+                path.display(),
+                source.kind()
             ),
-            Self::FlushTemp { path, kind } => write!(
+            Self::FlushTemp { path, source } => write!(
                 formatter,
-                "cannot flush temporary persisted state file for {} ({kind})",
-                path.display()
+                "cannot flush temporary persisted state file for {} ({})",
+                path.display(),
+                source.kind()
             ),
-            Self::SyncTemp { path, kind } => write!(
+            Self::SyncTemp { path, source } => write!(
                 formatter,
-                "cannot sync temporary persisted state file for {} ({kind})",
-                path.display()
+                "cannot sync temporary persisted state file for {} ({})",
+                path.display(),
+                source.kind()
             ),
-            Self::Rename { path, kind } => write!(
+            Self::Commit { path, source } => write!(
                 formatter,
-                "cannot atomically replace persisted state at {} ({kind})",
-                path.display()
+                "cannot atomically replace persisted state at {} ({})",
+                path.display(),
+                source.kind()
             ),
         }
     }
 }
 
-impl Error for PersistenceError {}
+impl Error for PersistenceError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Read { source, .. }
+            | Self::CreateTemp { source, .. }
+            | Self::WriteTemp { source, .. }
+            | Self::FlushTemp { source, .. }
+            | Self::SyncTemp { source, .. }
+            | Self::Commit { source, .. } => Some(source),
+            Self::Parse { source, .. } | Self::Serialize { source } => Some(source),
+            Self::UnsupportedSchema { .. } => None,
+        }
+    }
+}
 
 pub(crate) fn load_persisted_state(path: &Path) -> Result<PersistedState, PersistenceError> {
     let mut file = match File::open(path) {
@@ -146,7 +213,7 @@ pub(crate) fn load_persisted_state(path: &Path) -> Result<PersistedState, Persis
         Err(error) => {
             return Err(PersistenceError::Read {
                 path: path.to_path_buf(),
-                kind: error.kind(),
+                source: error,
             });
         }
     };
@@ -154,15 +221,17 @@ pub(crate) fn load_persisted_state(path: &Path) -> Result<PersistedState, Persis
     if let Err(error) = file.read_to_string(&mut json) {
         return Err(PersistenceError::Read {
             path: path.to_path_buf(),
-            kind: error.kind(),
+            source: error,
         });
     }
-    let state =
-        serde_json::from_str::<PersistedState>(&json).map_err(|error| PersistenceError::Parse {
+    let state = serde_json::from_str::<PersistedState>(&json).map_err(|source| {
+        PersistenceError::Parse {
             path: path.to_path_buf(),
-            line: error.line(),
-            column: error.column(),
-        })?;
+            line: source.line(),
+            column: source.column(),
+            source,
+        }
+    })?;
     if state.schema_version != SCHEMA_VERSION {
         return Err(PersistenceError::UnsupportedSchema {
             path: path.to_path_buf(),
@@ -176,7 +245,8 @@ pub(crate) fn save_persisted_state(
     path: &Path,
     state: &PersistedState,
 ) -> Result<(), PersistenceError> {
-    let serialized = serde_json::to_vec_pretty(state).map_err(|_| PersistenceError::Serialize)?;
+    let serialized = serde_json::to_vec_pretty(state)
+        .map_err(|source| PersistenceError::Serialize { source })?;
     save_serialized_state(path, &serialized, false)
 }
 
@@ -185,55 +255,35 @@ fn save_serialized_state(
     serialized: &[u8],
     fail_before_write: bool,
 ) -> Result<(), PersistenceError> {
-    let temporary_path = temporary_path(path);
-    let result = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary_path)
-            .map_err(|error| PersistenceError::CreateTemp {
-                path: path.to_path_buf(),
-                kind: error.kind(),
-            })?;
-        if fail_before_write {
-            return Err(PersistenceError::WriteTemp {
-                path: path.to_path_buf(),
-                kind: io::ErrorKind::Other,
-            });
-        }
-        file.write_all(serialized)
-            .map_err(|error| PersistenceError::WriteTemp {
-                path: path.to_path_buf(),
-                kind: error.kind(),
-            })?;
-        file.flush().map_err(|error| PersistenceError::FlushTemp {
+    let mut file = AtomicWriteFile::open(path).map_err(|source| PersistenceError::CreateTemp {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if fail_before_write {
+        let _ = file.discard();
+        return Err(PersistenceError::WriteTemp {
             path: path.to_path_buf(),
-            kind: error.kind(),
-        })?;
-        file.sync_all()
-            .map_err(|error| PersistenceError::SyncTemp {
-                path: path.to_path_buf(),
-                kind: error.kind(),
-            })?;
-
-        fs::rename(&temporary_path, path).map_err(|error| PersistenceError::Rename {
-            path: path.to_path_buf(),
-            kind: error.kind(),
-        })
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary_path);
+            source: io::Error::other("injected write failure"),
+        });
     }
-    result
-}
-
-fn temporary_path(path: &Path) -> PathBuf {
-    let directory = path.parent().unwrap_or_else(|| Path::new("."));
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("state");
-    directory.join(format!(".{name}.{}.tmp", std::process::id()))
+    file.write_all(serialized)
+        .map_err(|source| PersistenceError::WriteTemp {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.flush().map_err(|source| PersistenceError::FlushTemp {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    file.sync_all()
+        .map_err(|source| PersistenceError::SyncTemp {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.commit().map_err(|source| PersistenceError::Commit {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 pub(crate) fn store_bot_data(bot_data: &crate::BotData) -> Result<(), PersistenceError> {
@@ -253,7 +303,8 @@ fn save_persisted_state_with_failure_for_test(
     path: &Path,
     state: &PersistedState,
 ) -> Result<(), PersistenceError> {
-    let serialized = serde_json::to_vec_pretty(state).map_err(|_| PersistenceError::Serialize)?;
+    let serialized = serde_json::to_vec_pretty(state)
+        .map_err(|source| PersistenceError::Serialize { source })?;
     save_serialized_state(path, &serialized, true)
 }
 
@@ -303,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_persisted_startup_returns_before_any_stdin_recovery() {
+    fn invalid_persisted_state_reports_a_parse_error() {
         let path = temporary_data_file("corrupt");
         fs::write(&path, "{ definitely not json").expect("corrupt fixture must be written");
         let error = load_persisted_state(&path)
