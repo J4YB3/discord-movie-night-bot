@@ -3,8 +3,8 @@
   "votes": {},
   "bot_user": {
     "id": 77,
-    "name": "movie-bot",
-    "discriminator": "0001",
+    "username": "movie-bot",
+    "discriminator": 1,
     "avatar": null,
     "bot": true
   },
